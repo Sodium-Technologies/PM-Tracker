@@ -20,23 +20,30 @@ export interface AccountResult {
 
 export function computeAccount(account: Account, staff: StaffMember[], usdToPkr: number): AccountResult {
   const units = sum(account.entries);
-  const grossUsd = round2(account.rate * units);
-  const feeUsd = round2(grossUsd * (account.feePct / 100));
-  const earnedUsd = round2(grossUsd - feeUsd + (Number(account.adjustmentUsd) || 0));
+  // All of the arithmetic happens in the account's own currency, then converts
+  // once — an account settled in PKR never depends on the conversion rate.
+  const gross = round2(account.rate * units);
+  const fee = round2(gross * (account.feePct / 100));
+  const earned = round2(gross - fee + (Number(account.adjustmentUsd) || 0));
+  const inPkr = account.currency === 'PKR';
+  const toUsd = (v: number) => (inPkr ? (usdToPkr ? round2(v / usdToPkr) : 0) : v);
+  const toPkr = (v: number) => (inPkr ? v : round2(v * usdToPkr));
+
+  const earnedUsd = toUsd(earned);
   const freelancerUsd = round2(earnedUsd * (account.freelancerPct / 100));
-  const companyUsd = round2(earnedUsd - freelancerUsd);
+  const freelancerPkr = round2(toPkr(earned) * (account.freelancerPct / 100));
   const allocated = sum(staff.map((s) => s.shares[account.id] || 0));
   return {
     account,
     units,
-    grossUsd,
-    feeUsd,
+    grossUsd: toUsd(gross),
+    feeUsd: toUsd(fee),
     earnedUsd,
-    earnedPkr: round2(earnedUsd * usdToPkr),
+    earnedPkr: toPkr(earned),
     freelancerUsd,
-    freelancerPkr: round2(freelancerUsd * usdToPkr),
-    companyUsd,
-    companyPkr: round2(companyUsd * usdToPkr),
+    freelancerPkr,
+    companyUsd: round2(earnedUsd - freelancerUsd),
+    companyPkr: round2(toPkr(earned) - freelancerPkr),
     allocated,
   };
 }
@@ -45,6 +52,8 @@ export interface StaffResult {
   staff: StaffMember;
   /** accountId -> PKR earned from that account */
   byAccount: Record<string, number>;
+  /** pay from the division matrix, before the manual adjustment */
+  sharePkr: number;
   payPkr: number;
   payUsd: number;
 }
@@ -66,10 +75,14 @@ export interface PeriodResult {
     unallocatedPkr: number;
   };
   ledger: {
-    reimbursementsPkr: number;
-    settledReimbursementsPkr: number;
+    otherPayablesPkr: number;
+    /** everything owed this period: staff pay + outside payables + company share */
     transferablePkr: number;
-    transferredPkr: number;
+    reimbursementsPkr: number;
+    retainedPkr: number;
+    withheldPkr: number;
+    transfersPkr: number;
+    /** what still has to be remitted */
     remainingPkr: number;
   };
   warnings: string[];
@@ -81,15 +94,16 @@ export function computePeriod(period: Period): PeriodResult {
 
   const staff: StaffResult[] = period.staff.map((s) => {
     const byAccount: Record<string, number> = {};
-    let payPkr = 0;
+    let sharePkr = 0;
     for (const ar of accounts) {
       const share = Number(s.shares[ar.account.id]) || 0;
       const amount = round2(ar.freelancerPkr * share);
       if (amount) byAccount[ar.account.id] = amount;
-      payPkr += amount;
+      sharePkr += amount;
     }
-    payPkr = round2(payPkr);
-    return { staff: s, byAccount, payPkr, payUsd: rate ? round2(payPkr / rate) : 0 };
+    sharePkr = round2(sharePkr);
+    const payPkr = round2(sharePkr + (Number(s.adjustmentPkr) || 0));
+    return { staff: s, byAccount, sharePkr, payPkr, payUsd: rate ? round2(payPkr / rate) : 0 };
   });
 
   const t = {
@@ -104,14 +118,21 @@ export function computePeriod(period: Period): PeriodResult {
     staffPayPkr: round2(sum(staff.map((s) => s.payPkr))),
     unallocatedPkr: 0,
   };
-  t.unallocatedPkr = round2(t.freelancerPkr - t.staffPayPkr);
+  t.unallocatedPkr = round2(t.freelancerPkr - round2(sum(staff.map((x) => x.sharePkr))));
 
+  const otherPayablesPkr = round2(sum(period.otherPayables.map((x) => x.amountPkr)));
+  const withheldPkr = round2(sum(period.withheld.map((x) => x.amountPkr)));
+  const transfersPkr = round2(sum(period.transfers.map((x) => x.amountPkr)));
   const reimbursementsPkr = round2(sum(period.reimbursements.map((r) => r.amountUsd)) * rate);
-  const settledReimbursementsPkr = round2(
-    sum(period.reimbursements.filter((r) => r.settled).map((r) => r.amountUsd)) * rate,
+  const retainedPkr = round2(sum(staff.filter((s) => s.staff.retained).map((s) => s.payPkr)));
+
+  // Everything owed for the period …
+  const transferablePkr = round2(t.staffPayPkr + otherPayablesPkr + t.companyPkr);
+  // … less what never has to travel: expenses already covered on the receiving
+  // side, pay that stays put, amounts held back, and money already sent.
+  const remainingPkr = round2(
+    transferablePkr - reimbursementsPkr - retainedPkr - withheldPkr - transfersPkr,
   );
-  const transferablePkr = round2(t.staffPayPkr + t.companyPkr + reimbursementsPkr);
-  const transferredPkr = round2(sum(period.transfers.map((x) => x.amountPkr)) + settledReimbursementsPkr);
 
   const warnings: string[] = [];
   if (!rate) warnings.push('USD→PKR conversion rate is not set for this period.');
@@ -132,11 +153,13 @@ export function computePeriod(period: Period): PeriodResult {
     staff,
     totals: t,
     ledger: {
-      reimbursementsPkr,
-      settledReimbursementsPkr,
+      otherPayablesPkr,
       transferablePkr,
-      transferredPkr,
-      remainingPkr: round2(transferablePkr - transferredPkr),
+      reimbursementsPkr,
+      retainedPkr,
+      withheldPkr,
+      transfersPkr,
+      remainingPkr,
     },
     warnings,
   };

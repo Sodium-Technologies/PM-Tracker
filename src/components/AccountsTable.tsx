@@ -30,13 +30,14 @@ export default function AccountsTable({ period, result, update }: {
               <th>Account</th>
               <th>Owner</th>
               <th>Mode</th>
+              <th>Cur.</th>
               <th>Rate</th>
               <th>Time entries</th>
               <th className="r">Units</th>
-              <th className="r">Gross</th>
+              <th className="r">Gross USD</th>
               <th>Fee %</th>
               <th>Adjust $</th>
-              <th className="r">Earned</th>
+              <th className="r">Earned USD</th>
               <th className="r">Earned PKR</th>
               <th>Split %</th>
               <th className="r">Freelancer PKR</th>
@@ -60,7 +61,15 @@ export default function AccountsTable({ period, result, update }: {
                       <option value="fixed">fixed</option>
                     </select>
                   </td>
-                  <td><NumberInput value={a.rate} onChange={(v) => patch(a.id, { rate: v })} width={70} /></td>
+                  <td>
+                    <select className="cell-input" value={a.currency}
+                      onChange={(e) => patch(a.id, { currency: e.target.value as Account['currency'] })}
+                      title="Currency the rate and adjustment are stated in">
+                      <option value="USD">USD</option>
+                      <option value="PKR">PKR</option>
+                    </select>
+                  </td>
+                  <td><NumberInput value={a.rate} onChange={(v) => patch(a.id, { rate: v })} width={80} /></td>
                   <td><EntriesInput entries={a.entries} onChange={(v) => patch(a.id, { entries: v })} /></td>
                   <td className="r mono">{fmtNum(r.units)}</td>
                   <td className="r mono">{fmtUsd(r.grossUsd)}</td>
@@ -90,12 +99,12 @@ export default function AccountsTable({ period, result, update }: {
               );
             })}
             {!result.accounts.length && (
-              <tr><td colSpan={17} className="empty">No accounts yet — add one, or import a mastersheet.</td></tr>
+              <tr><td colSpan={18} className="empty">No accounts yet — add one, or import a mastersheet.</td></tr>
             )}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={6}>Totals</td>
+              <td colSpan={7}>Totals</td>
               <td className="r mono">{fmtUsd(result.totals.grossUsd)}</td>
               <td className="r mono">{fmtUsd(result.totals.feeUsd)}</td>
               <td />

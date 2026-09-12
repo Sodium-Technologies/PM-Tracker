@@ -2,7 +2,7 @@ import React from 'react';
 import type { AppState, Period } from './lib/types';
 import { computePeriod, fmtPkr, fmtUsd } from './lib/calc';
 import {
-  defaultLabel, emptyState, loadState, newPeriod, rollForward, saveState, uid,
+  defaultLabel, emptyState, loadState, newPeriod, normalize, rollForward, saveState, uid,
 } from './lib/state';
 import { exportWorkbook, importWorkbook } from './lib/xlsx';
 import AccountsTable from './components/AccountsTable';
@@ -64,6 +64,13 @@ export default function App() {
 
   const onImport = async (file: File) => {
     try {
+      if (file.name.endsWith('.json')) {
+        const restored = normalize(JSON.parse(await file.text()) as AppState);
+        if (!restored.periods?.length) throw new Error('no periods in that backup');
+        setState(restored);
+        setToast(`Restored ${restored.periods.length} periods from backup.`);
+        return;
+      }
       const periods = await importWorkbook(file);
       if (!periods.length) { setToast('No payroll sheets recognised in that file.'); return; }
       setState((s) => ({ ...s, periods: [...s.periods, ...periods], activePeriodId: periods[periods.length - 1].id }));
@@ -90,9 +97,9 @@ export default function App() {
           <span className="muted">revenue → splits → payouts</span>
         </div>
         <div className="actions">
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" hidden
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.json" hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = ''; }} />
-          <button className="btn" onClick={() => fileRef.current?.click()}>Import sheet</button>
+          <button className="btn" onClick={() => fileRef.current?.click()}>Import sheet / backup</button>
           <button className="btn" onClick={() => exportWorkbook(state.periods, 'PM Payroll.xlsx')}>Export Excel</button>
           <button className="btn ghost" onClick={exportJson}>Backup</button>
         </div>
@@ -126,7 +133,7 @@ export default function App() {
         <Stat label="Freelancer pool" value={fmtPkr(result.totals.freelancerPkr)} sub={fmtUsd(result.totals.freelancerUsd)} />
         <Stat label="Company share" value={fmtPkr(result.totals.companyPkr)} sub={fmtUsd(result.totals.companyUsd)} />
         <Stat label="Staff payouts" value={fmtPkr(result.totals.staffPayPkr)} sub={`${period.staff.length} people`} />
-        <Stat label="Remaining to send" value={fmtPkr(result.ledger.remainingPkr)} sub={`of ${fmtPkr(result.ledger.transferablePkr)}`} />
+        <Stat label="Still to remit" value={fmtPkr(result.ledger.remainingPkr)} sub={`of ${fmtPkr(result.ledger.transferablePkr)} owed`} />
       </div>
 
       {result.warnings.length > 0 && (
@@ -151,8 +158,6 @@ export default function App() {
 
       <footer className="foot muted small">
         Saved in this browser only. Export to Excel or Backup before switching devices.
-        Figures are a working calculation, not tax or legal advice — check withholding and
-        contractor-classification rules before paying out.
       </footer>
 
       {toast && <div className="toast">{toast}</div>}
