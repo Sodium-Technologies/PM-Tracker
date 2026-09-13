@@ -103,7 +103,7 @@ await page.getByRole('button', { name: 'Delete' }).click();
 await page.waitForTimeout(400);
 ok('delete removes the period', (await page.locator('.period').count()) === periodCount, `${await page.locator('.period').count()} left`);
 ok('delete lands on a neighbour, not the first period',
-   (await page.locator('.period.active').innerText()).includes('September 2026'),
+   (await page.locator('.period.active').innerText()).includes(active),
    (await page.locator('.period.active').innerText()).replace(/\n/g,' '));
 
 // 8. persistence

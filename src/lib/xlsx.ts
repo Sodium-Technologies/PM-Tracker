@@ -71,6 +71,9 @@ export function parseSheet(label: string, ws: XLSX.WorkSheet): Period | null {
   // Newer sheets state the fee in its own column as a fraction (0.15) instead of
   // burying it in the earned formula.
   const cFeeDeduction = colIndex(H, 'Fee Deduction', 'Fee', 'Deduction');
+  // A one-off amount a percentage cannot express: a platform true-up, a bonus
+  // carried from another engagement, a correction.
+  const cAdjustment = colIndex(H, 'Adjustment', 'Adjust');
 
   const period = newPeriod(label, 0);
 
@@ -107,6 +110,7 @@ export function parseSheet(label: string, ws: XLSX.WorkSheet): Period | null {
     // Recover `earned = gross x multiplier + adjustment` by re-evaluating the
     // earned formula at two different hour counts.
     const statedFee = cFeeDeduction >= 0 ? num(grid[r]?.[cFeeDeduction]) : 0;
+    const statedAdjustment = cAdjustment >= 0 ? num(grid[r]?.[cAdjustment]) : 0;
     let multiplier = 1;
     let adjustmentUsd = 0;
     const f0 = currency === 'PKR' ? null : evalCell(ws, aEarned, { [aHours]: units });
@@ -153,7 +157,7 @@ export function parseSheet(label: string, ws: XLSX.WorkSheet): Period | null {
       // The stated fee wins when the sheet has a fee column: it is the number the
       // user maintains, and it survives editing the hours afterwards.
       feePct: invoiced ? 0 : statedFee > 0 ? round2(statedFee * 100) : round2((1 - multiplier) * 100),
-      adjustmentUsd: invoiced ? 0 : adjustmentUsd,
+      adjustmentUsd: invoiced ? 0 : statedAdjustment || adjustmentUsd,
       notes: buildNote(invoiced, units, earned, earnedPkrCell, period.usdToPkr, currency),
       freelancerPct: freelancerPct || 70,
       status: cStatus >= 0 ? text(grid[r]?.[cStatus]) || 'Pending' : 'Pending',

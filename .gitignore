@@ -7,3 +7,9 @@ tsconfig.tsbuildinfo
 # Local assistant context pack — contains client and payroll detail,
 # kept on the local machine rather than pushed to the remote.
 assistant-context/
+
+# Seed data holds real client and payroll figures — kept out of the repo.
+# Generate it with: npm run seed -- public/seed.json <mastersheet.xlsx>
+public/seed.json
+seed.json
+e2e-out/

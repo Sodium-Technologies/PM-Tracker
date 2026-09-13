@@ -45,6 +45,37 @@ npm run dev      # http://localhost:5173
 npm run build    # static bundle in dist/
 ```
 
+## Deploying
+
+`netlify.toml` is set up: build `npm run build`, publish `dist`.
+
+**From GitHub (recommended).** In Netlify, *Add new site → Import an existing
+project*, pick this repository and the branch. Netlify reads `netlify.toml`, so
+there is nothing to configure, and every push redeploys.
+
+**By hand.** Run `npm run build` and drag the `dist` folder onto
+app.netlify.com/drop.
+
+### Starting a deployment with data in it
+
+A fresh browser loads `./seed.json` from the site if one is there, so the app can
+open on real periods instead of an empty month:
+
+```bash
+npm run seed -- public/seed.json <mastersheet.xlsx> [corrected.xlsx ...]
+npm run build          # seed.json is copied into dist/
+```
+
+Later files win where two workbooks carry the same month, so name the corrected
+one last.
+
+`seed.json` is **not** in the repository, and the ignore rule keeps it out. That
+is deliberate: a Netlify site is public to anyone with the URL, and the seed
+holds client names, rates and payouts. Ship it only if the site is protected
+(Netlify's password protection or an access control), or leave it out and import
+the same file once through *Import sheet or backup* — the data then lives in your
+browser and never reaches the web.
+
 ## Checking it still works
 
 `scripts/e2e.mjs` drives the built app in a real browser: it imports a

@@ -15,11 +15,29 @@ type Tab = 'revenue' | 'division' | 'payouts';
 
 export default function App() {
   const [state, setState] = React.useState<AppState>(() => loadState() ?? emptyState());
+  const [hadSaved] = React.useState(() => loadState() !== null);
   const [tab, setTab] = React.useState<Tab>('revenue');
   const [toast, setToast] = React.useState('');
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => { saveState(state); }, [state]);
+
+  // A fresh browser starts from seed.json when the deployment ships one, so the
+  // app opens on real periods instead of an empty month. It is data, not code —
+  // replace the file to change what a new visitor sees.
+  React.useEffect(() => {
+    if (hadSaved) return;
+    let cancelled = false;
+    fetch('./seed.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: AppState | null) => {
+        if (cancelled || !data?.periods?.length) return;
+        setState(normalize(data));
+        setToast(`Loaded ${data.periods.length} periods`);
+      })
+      .catch(() => { /* no seed shipped — start empty */ });
+    return () => { cancelled = true; };
+  }, [hadSaved]);
   React.useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(''), 4000);
