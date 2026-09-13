@@ -1,7 +1,6 @@
 /** Core data model. Everything is dynamic: periods, accounts, staff and splits
  *  are all user-defined at runtime — nothing about the roster is hard-coded. */
 
-export type BillingMode = 'hourly' | 'fixed';
 export type Currency = 'USD' | 'PKR';
 
 export interface Account {
@@ -10,15 +9,17 @@ export interface Account {
   name: string;
   /** Who owns the account internally (the mastersheet "Account" column). */
   owner: string;
-  mode: BillingMode;
   /** Currency the rate and adjustments are stated in. Most accounts bill in USD;
    *  some are settled directly in PKR and never touch a conversion. */
   currency: Currency;
-  /** Rate per hour (hourly) or per unit/month (fixed), in `currency`. */
+  /** Rate per unit of work — an hour, a lease, a month — in `currency`.
+   *  A fixed amount is simply a rate with a single unit. */
   rate: number;
   /** Individual time entries (weeks, invoices, units). Summed to get hours/units. */
   entries: number[];
-  /** Platform/agency fee withheld from gross, as a percentage (e.g. 1, 10, 15). */
+  /** Fee deduction withheld from gross, as a percentage (e.g. 1, 10, 15).
+   *  Mirrors the "Fee Deduction" column in the mastersheet, which holds it as a
+   *  fraction (0.15). */
   feePct: number;
   /** Free-form correction applied after the fee, in `currency`
    *  (refunds, bonuses, true-ups). */

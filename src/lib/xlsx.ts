@@ -68,6 +68,9 @@ export function parseSheet(label: string, ws: XLSX.WorkSheet): Period | null {
   const cAccount = colIndex(H, 'Account');
   const cConv = colIndex(H, 'Conversion');
   const cReimb = colIndex(H, 'Reimbursements');
+  // Newer sheets state the fee in its own column as a fraction (0.15) instead of
+  // burying it in the earned formula.
+  const cFeeDeduction = colIndex(H, 'Fee Deduction', 'Fee', 'Deduction');
 
   const period = newPeriod(label, 0);
 
@@ -103,6 +106,7 @@ export function parseSheet(label: string, ws: XLSX.WorkSheet): Period | null {
 
     // Recover `earned = gross x multiplier + adjustment` by re-evaluating the
     // earned formula at two different hour counts.
+    const statedFee = cFeeDeduction >= 0 ? num(grid[r]?.[cFeeDeduction]) : 0;
     let multiplier = 1;
     let adjustmentUsd = 0;
     const f0 = currency === 'PKR' ? null : evalCell(ws, aEarned, { [aHours]: units });
@@ -146,12 +150,13 @@ export function parseSheet(label: string, ws: XLSX.WorkSheet): Period | null {
       owner: cAccount >= 0 ? text(grid[r]?.[cAccount]) : '',
       rate: invoiced ? round2(adjustmentUsd) : rate,
       entries: invoiced ? [1] : entries,
-      feePct: invoiced ? 0 : round2((1 - multiplier) * 100),
+      // The stated fee wins when the sheet has a fee column: it is the number the
+      // user maintains, and it survives editing the hours afterwards.
+      feePct: invoiced ? 0 : statedFee > 0 ? round2(statedFee * 100) : round2((1 - multiplier) * 100),
       adjustmentUsd: invoiced ? 0 : adjustmentUsd,
       notes: buildNote(invoiced, units, earned, earnedPkrCell, period.usdToPkr, currency),
       freelancerPct: freelancerPct || 70,
       status: cStatus >= 0 ? text(grid[r]?.[cStatus]) || 'Pending' : 'Pending',
-      mode: currency === 'PKR' || invoiced || rate > 100 ? 'fixed' : 'hourly',
     });
     period.accounts.push(account);
     accountByRow[r + 1] = account.id;
@@ -275,6 +280,18 @@ export async function importWorkbook(file: File): Promise<Period[]> {
 /** Export every period: one revenue+division sheet per period, plus a summary. */
 export function exportWorkbook(periods: Period[], filename: string) {
   const wb = XLSX.utils.book_new();
+  // Sheet names must be unique and at most 31 characters, and two periods can
+  // legitimately carry the same label — so number the duplicates rather than
+  // letting the whole export fail.
+  const used = new Set<string>();
+  const sheetName = (label: string) => {
+    const base = (label.trim() || 'Period').slice(0, 31);
+    if (!used.has(base)) { used.add(base); return base; }
+    for (let n = 2; ; n++) {
+      const candidate = `${base.slice(0, 31 - String(n).length - 3)} (${n})`;
+      if (!used.has(candidate)) { used.add(candidate); return candidate; }
+    }
+  };
 
   const summary: (string | number)[][] = [
     ['Period', 'USD→PKR', 'Gross USD', 'Fees USD', 'Earned USD', 'Freelancer USD', 'Company USD', 'Staff pay PKR', 'Transferable PKR', 'Remaining PKR'],
@@ -289,11 +306,11 @@ export function exportWorkbook(periods: Period[], filename: string) {
     ]);
 
     const rows: (string | number)[][] = [
-      ['Account', 'Owner', 'Mode', 'Rate', 'Units', 'Gross USD', 'Fee %', 'Fee USD', 'Adjustment USD', 'Earned USD', 'Earned PKR', 'Freelancer %', 'Freelancer USD', 'Freelancer PKR', 'Company USD', 'Company PKR', 'Status', 'Notes'],
+      ['Account', 'Owner', 'Currency', 'Rate', 'Units', 'Gross', 'Fee %', 'Fee', 'Adjustment', 'Earned USD', 'Earned PKR', 'Freelancer %', 'Freelancer USD', 'Freelancer PKR', 'Company USD', 'Company PKR', 'Status', 'Notes'],
     ];
     for (const a of res.accounts) {
       rows.push([
-        a.account.name, a.account.owner, a.account.mode, a.account.rate, a.units, a.grossUsd,
+        a.account.name, a.account.owner, a.account.currency, a.account.rate, a.units, a.grossUsd,
         a.account.feePct, a.feeUsd, a.account.adjustmentUsd, a.earnedUsd, a.earnedPkr,
         a.account.freelancerPct, a.freelancerUsd, a.freelancerPkr, a.companyUsd, a.companyPkr,
         a.account.status, a.account.notes,
@@ -326,14 +343,17 @@ export function exportWorkbook(periods: Period[], filename: string) {
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = rows[0].map(() => ({ wch: 16 }));
-    XLSX.utils.book_append_sheet(wb, ws, p.label.slice(0, 31) || 'Period');
+    XLSX.utils.book_append_sheet(wb, ws, sheetName(p.label));
   }
 
   const sws = XLSX.utils.aoa_to_sheet(summary);
   sws['!cols'] = summary[0].map(() => ({ wch: 16 }));
-  XLSX.utils.book_append_sheet(wb, sws, 'Summary');
+  XLSX.utils.book_append_sheet(wb, sws, sheetName('Summary'));
   XLSX.writeFile(wb, filename);
 }
+
+/** Strip characters a file system will not accept in a name. */
+const safeFilename = (s: string) => s.replace(/[\\/:*?"<>|]/g, '-').trim() || 'period';
 
 /** Per-person payout sheet for the active period — what actually gets paid out. */
 export function exportPayoutSheet(period: Period) {
@@ -355,7 +375,7 @@ export function exportPayoutSheet(period: Period) {
   ws['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 15 }, { wch: 14 }, { wch: 12 }, { wch: 11 }, { wch: 70 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Payouts');
-  XLSX.writeFile(wb, `Payouts - ${period.label}.xlsx`);
+  XLSX.writeFile(wb, `Payouts - ${safeFilename(period.label)}.xlsx`);
 }
 
 export type { Account, StaffMember };

@@ -1,12 +1,12 @@
 import React from 'react';
 
-export function TextInput({ value, onChange, placeholder, width }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; width?: number;
+export function TextInput({ id, value, onChange, placeholder, className = '' }: {
+  id?: string; value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
 }) {
   return (
     <input
-      className="cell-input"
-      style={width ? { width } : undefined}
+      id={id}
+      className={`cell-input ${className}`}
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
@@ -14,17 +14,20 @@ export function TextInput({ value, onChange, placeholder, width }: {
   );
 }
 
-/** Numeric input that keeps the raw text while typing so "1.", "" and "-" work. */
-export function NumberInput({ value, onChange, step = 'any', width = 80, suffix }: {
-  value: number; onChange: (v: number) => void; step?: string; width?: number; suffix?: string;
+/** Numeric input that keeps the raw text while typing, so "1.", "" and "-" work,
+ *  with the unit shown beside it rather than inside the value. */
+export function NumberInput({ id, value, onChange, unit, width = 72, step = 'any' }: {
+  id?: string; value: number; onChange: (v: number) => void;
+  unit?: string; width?: number; step?: string;
 }) {
   const [draft, setDraft] = React.useState<string | null>(null);
   const shown = draft ?? (Number.isFinite(value) ? String(value) : '');
   return (
-    <span className="num-wrap">
+    <span className="unit">
       <input
+        id={id}
         className="cell-input num"
-        style={{ width }}
+        style={{ width, minWidth: width }}
         type="number"
         step={step}
         value={shown}
@@ -35,23 +38,25 @@ export function NumberInput({ value, onChange, step = 'any', width = 80, suffix 
         }}
         onBlur={() => setDraft(null)}
       />
-      {suffix && <span className="suffix">{suffix}</span>}
+      {unit && <span className="tag">{unit}</span>}
     </span>
   );
 }
 
-/** Comma/plus separated list of time entries, e.g. "20+20+20+20" like the sheet. */
-export function EntriesInput({ entries, onChange }: {
-  entries: number[]; onChange: (v: number[]) => void;
+/** The individual time entries, written the way the sheet writes them:
+ *  `20 + 20 + 20 + 20`. */
+export function EntriesInput({ id, entries, onChange }: {
+  id?: string; entries: number[]; onChange: (v: number[]) => void;
 }) {
   const [draft, setDraft] = React.useState<string | null>(null);
   const shown = draft ?? entries.filter((e) => e !== 0 || entries.length === 1).join(' + ');
   return (
     <input
-      className="cell-input entries"
+      id={id}
+      className="cell-input num entries"
       value={shown}
       placeholder="20 + 20 + 20"
-      title="Each time entry, separated by + or ,"
+      title="Each time entry, separated by +"
       onChange={(e) => {
         setDraft(e.target.value);
         const parts = e.target.value

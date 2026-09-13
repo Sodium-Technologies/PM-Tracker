@@ -3,7 +3,7 @@ import { fmtPkr, round2, type PeriodResult } from '../lib/calc';
 import { NumberInput, TextInput } from './Fields';
 import { newStaff } from '../lib/state';
 
-/** Shares are stored as fractions (0.35) but edited as percentages (35%). */
+/** Shares are stored as fractions (0.35) and edited as percentages (35). */
 export default function DivisionMatrix({ period, result, update }: {
   period: Period;
   result: PeriodResult;
@@ -19,24 +19,29 @@ export default function DivisionMatrix({ period, result, update }: {
 
   const splitEvenly = (accountId: string) =>
     update((d) => {
-      const share = d.staff.length ? 1 / d.staff.length : 0;
-      d.staff.forEach((s) => { s.shares[accountId] = round2(share * 10000) / 10000; });
+      if (!d.staff.length) return;
+      const share = Math.round((1 / d.staff.length) * 10000) / 10000;
+      d.staff.forEach((s) => { s.shares[accountId] = share; });
     });
 
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Division — who earns what share of each account</h2>
-        <button className="btn" onClick={() => update((d) => d.staff.push(newStaff()))}>+ Add team member</button>
+        <h2>
+          Division <span className="hint">each person's share of an account's team pool</span>
+        </h2>
+        <button className="btn" onClick={() => update((d) => d.staff.push(newStaff()))}>
+          Add team member
+        </button>
       </div>
       <div className="scroll">
         <table>
           <thead>
             <tr>
               <th>Team member</th>
-              <th className="r">Pay (PKR)</th>
+              <th className="fig">Pay</th>
               {result.accounts.map((a) => (
-                <th key={a.account.id} className="rot">
+                <th key={a.account.id} className="fig">
                   <div>{a.account.name}</div>
                   <button className="link" onClick={() => splitEvenly(a.account.id)}>split evenly</button>
                 </th>
@@ -47,22 +52,27 @@ export default function DivisionMatrix({ period, result, update }: {
           <tbody>
             {result.staff.map((s) => (
               <tr key={s.staff.id}>
-                <td><TextInput value={s.staff.name} onChange={(v) => update((d) => {
-                  const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.name = v;
-                })} width={150} /></td>
-                <td className="r mono strong">{fmtPkr(s.payPkr)}</td>
-                {result.accounts.map((a) => (
-                  <td key={a.account.id} className={s.staff.shares[a.account.id] ? 'has-share' : ''}>
-                    <NumberInput
-                      value={round2((s.staff.shares[a.account.id] || 0) * 100)}
-                      onChange={(v) => setShare(s.staff.id, a.account.id, v)}
-                      width={62}
-                      suffix="%"
-                    />
-                  </td>
-                ))}
+                <td className="name">
+                  <TextInput value={s.staff.name} onChange={(v) => update((d) => {
+                    const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.name = v;
+                  })} />
+                </td>
+                <td className="fig mono total">{fmtPkr(s.payPkr)}</td>
+                {result.accounts.map((a) => {
+                  const share = s.staff.shares[a.account.id] || 0;
+                  return (
+                    <td key={a.account.id} className={`share${share ? ' set' : ''}`}>
+                      <NumberInput
+                        value={round2(share * 100)}
+                        onChange={(v) => setShare(s.staff.id, a.account.id, v)}
+                        width={46}
+                        unit="%"
+                      />
+                    </td>
+                  );
+                })}
                 <td>
-                  <button className="btn ghost danger" title="Remove member"
+                  <button className="btn icon" title={`Remove ${s.staff.name}`} aria-label={`Remove ${s.staff.name}`}
                     onClick={() => update((d) => { d.staff = d.staff.filter((x) => x.id !== s.staff.id); })}>×</button>
                 </td>
               </tr>
@@ -74,11 +84,15 @@ export default function DivisionMatrix({ period, result, update }: {
           <tfoot>
             <tr>
               <td>Allocated</td>
-              <td className="r mono">{fmtPkr(result.totals.staffPayPkr)}</td>
+              <td className="fig mono">{fmtPkr(result.totals.staffPayPkr)}</td>
               {result.accounts.map((a) => {
                 const pct = round2(a.allocated * 100);
                 const ok = pct === 100 || a.earnedUsd === 0;
-                return <td key={a.account.id} className={`r mono ${ok ? 'ok' : 'warn'}`}>{pct}%</td>;
+                return (
+                  <td key={a.account.id} className={`fig mono ${ok ? 'alloc-ok' : 'alloc-off'}`}>
+                    {pct}%
+                  </td>
+                );
               })}
               <td />
             </tr>
@@ -86,8 +100,8 @@ export default function DivisionMatrix({ period, result, update }: {
         </table>
       </div>
       {result.totals.unallocatedPkr !== 0 && (
-        <p className="note warn-text">
-          {fmtPkr(result.totals.unallocatedPkr)} of the freelancer pool is not assigned to anyone.
+        <p className="panel-note">
+          {fmtPkr(result.totals.unallocatedPkr)} of the team pool is not assigned to anyone.
         </p>
       )}
     </section>

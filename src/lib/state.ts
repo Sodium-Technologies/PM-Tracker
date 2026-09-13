@@ -9,7 +9,6 @@ export function newAccount(partial: Partial<Account> = {}): Account {
     id: uid(),
     name: 'New account',
     owner: '',
-    mode: 'hourly',
     currency: 'USD',
     rate: 0,
     entries: [0],

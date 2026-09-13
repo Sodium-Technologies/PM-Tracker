@@ -11,10 +11,10 @@ per period.
 
 1. **Revenue** — one row per client account. Enter the rate and the individual
    time entries (`20 + 20 + 20 + 20`, just like the sheet). The app computes
-   gross, the platform/agency fee, one-off adjustments, earned, the PKR
-   conversion, and the freelancer/company split. An account can be billed in USD
-   or settled directly in PKR, and a fixed line can simply carry an invoiced
-   amount.
+   gross, the fee deduction, one-off adjustments, earned, the PKR conversion,
+   and the team/company split. An account can be billed in USD or settled
+   directly in PKR (click the currency tag on the rate), and a fixed line is
+   simply a rate with a single unit.
 2. **Division** — a staff × account matrix of percentage shares of each
    account's freelancer pool. Columns that don't add to 100% are flagged, with
    the unassigned amount shown in PKR.
@@ -45,6 +45,18 @@ npm run dev      # http://localhost:5173
 npm run build    # static bundle in dist/
 ```
 
+## Checking it still works
+
+`scripts/e2e.mjs` drives the built app in a real browser: it imports a
+mastersheet, exercises the Excel, payout and JSON exports, reads the exported
+files back, then checks roll-forward, delete, reload persistence and the
+allocation display.
+
+```bash
+npm run build
+npm run e2e -- /path/to/PM_Mastersheet.xlsx
+```
+
 ## Calculation reference
 
 Per account, in that account's own currency:
@@ -73,8 +85,12 @@ anything deliberately held back.
 
 ## Reconciliation
 
-The importer was checked against every month tab of the mastersheet. Earned-PKR
+The importer is checked against every month tab of the mastersheet. Earned-PKR
 and per-person pay match the sheet on all of them, to the rupee, except one cell:
 January's Nick row, where the sheet hard-codes a PKR figure converted at three
 different rates. The app flags that in the row's notes instead of silently
-disagreeing — enter it as a PKR-denominated account if you want the exact figure.
+disagreeing — switch that account to PKR if you want the exact figure.
+
+The September 2026 layout — a separate **Fee Deduction** column holding the fee
+as a fraction — is read directly when present, so editing the hours afterwards
+keeps the fee the user set rather than re-deriving it.
