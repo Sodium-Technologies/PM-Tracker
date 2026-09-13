@@ -1,6 +1,6 @@
 import type { Period } from '../lib/types';
 import { fmtPkr, round2, type PeriodResult } from '../lib/calc';
-import { NumberInput, TextInput } from './Fields';
+import { EditOnly, NumberInput, TextInput } from './Fields';
 import { newStaff } from '../lib/state';
 
 /** Shares are stored as fractions (0.35) and edited as percentages (35). */
@@ -30,9 +30,11 @@ export default function DivisionMatrix({ period, result, update }: {
         <h2>
           Division <span className="hint">each person's share of an account's team pool</span>
         </h2>
-        <button className="btn" onClick={() => update((d) => d.staff.push(newStaff()))}>
-          Add team member
-        </button>
+        <EditOnly>
+          <button className="btn" onClick={() => update((d) => d.staff.push(newStaff()))}>
+            Add team member
+          </button>
+        </EditOnly>
       </div>
       <div className="scroll">
         <table>
@@ -43,7 +45,9 @@ export default function DivisionMatrix({ period, result, update }: {
               {result.accounts.map((a) => (
                 <th key={a.account.id} className="fig">
                   <div>{a.account.name}</div>
-                  <button className="link" onClick={() => splitEvenly(a.account.id)}>split evenly</button>
+                  <EditOnly>
+                    <button className="link" onClick={() => splitEvenly(a.account.id)}>split evenly</button>
+                  </EditOnly>
                 </th>
               ))}
               <th />
@@ -72,8 +76,10 @@ export default function DivisionMatrix({ period, result, update }: {
                   );
                 })}
                 <td>
-                  <button className="btn icon" title={`Remove ${s.staff.name}`} aria-label={`Remove ${s.staff.name}`}
-                    onClick={() => update((d) => { d.staff = d.staff.filter((x) => x.id !== s.staff.id); })}>×</button>
+                  <EditOnly>
+                    <button className="btn icon" title={`Remove ${s.staff.name}`} aria-label={`Remove ${s.staff.name}`}
+                      onClick={() => update((d) => { d.staff = d.staff.filter((x) => x.id !== s.staff.id); })}>×</button>
+                  </EditOnly>
                 </td>
               </tr>
             ))}

@@ -45,6 +45,50 @@ npm run dev      # http://localhost:5173
 npm run build    # static bundle in dist/
 ```
 
+## Sharing it with other people
+
+Without any configuration the app is a local tool: whatever is in your browser is
+yours, and there is nothing to sign in to. Point it at a Supabase project and it
+becomes a shared book with real accounts and roles.
+
+| Role | Can do |
+|---|---|
+| Administrator | edit the books **and** decide who has access |
+| Can edit | edit the books |
+| View only | read every figure, change nothing |
+
+Access is by email address. Someone you add signs in with a one-time link sent to
+that address — no passwords to set, forget, or leak. An address that is not on the
+list sees nothing: **the database refuses the data, not just the page.** That
+distinction matters — a login screen on a static site is decoration, because
+anything the browser receives can be read. Here the rules live in Postgres
+row-level security, so a viewer who opens dev tools and calls the API directly
+still cannot write, and a stranger gets an empty result.
+
+### Setting it up
+
+1. Create a project at supabase.com.
+2. Open **SQL Editor → New query**, paste `supabase/schema.sql`, change the email
+   at the bottom to the address you sign in with, and run it.
+3. In **Authentication → URL Configuration**, add your site URL to the redirect
+   allow list, so the sign-in link comes back to the right place.
+4. Set two environment variables in Netlify (**Site configuration → Environment
+   variables**), from **Project Settings → API**:
+
+   ```
+   VITE_SUPABASE_URL       https://<project>.supabase.co
+   VITE_SUPABASE_ANON_KEY  <the anon / publishable key>
+   ```
+
+   The anon key is designed to be public; it grants nothing on its own.
+5. Redeploy. Sign in as yourself, open **Access**, and add your partner's email
+   as *View only* or *Can edit*.
+6. Load the books once — *Import sheet or backup* — and they are shared with
+   everyone who has access.
+
+Both keys absent, the app falls back to browser storage and behaves exactly as it
+did before, which is what keeps the local copy and the preview working.
+
 ## Deploying
 
 `netlify.toml` is set up: build `npm run build`, publish `dist`.
@@ -87,6 +131,18 @@ allocation display.
 npm run build
 npm run e2e -- /path/to/PM_Mastersheet.xlsx
 ```
+
+`scripts/e2e-auth.mjs` checks the access rules the page enforces — signed out,
+signed in without access, viewer, editor, administrator — against a build
+configured for Supabase, with Supabase itself stubbed at the network boundary:
+
+```bash
+VITE_SUPABASE_URL=https://stub.supabase.co VITE_SUPABASE_ANON_KEY=stub-key npm run build
+npm run e2e:auth
+```
+
+It proves what the page does with each answer. What the *database* allows is
+`supabase/schema.sql`, and is enforced there whatever the page renders.
 
 ## Calculation reference
 

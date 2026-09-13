@@ -5,28 +5,49 @@ import {
   defaultLabel, emptyState, loadState, newPeriod, normalize, rollForward, saveState, uid,
 } from './lib/state';
 import { exportWorkbook, importWorkbook } from './lib/xlsx';
+import { cloudEnabled } from './lib/supabase';
+import { useAuth } from './lib/auth';
+import { AccessContext } from './lib/access';
+import * as cloud from './lib/cloud';
 import AccountsTable from './components/AccountsTable';
 import DivisionMatrix from './components/DivisionMatrix';
 import Ledger from './components/Ledger';
+import People from './components/People';
+import SignIn from './components/SignIn';
 import { NumberInput } from './components/Fields';
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
-type Tab = 'revenue' | 'division' | 'payouts';
+type Tab = 'revenue' | 'division' | 'payouts' | 'access';
 
 export default function App() {
-  const [state, setState] = React.useState<AppState>(() => loadState() ?? emptyState());
+  const auth = useAuth();
+
+  if (cloudEnabled) {
+    if (auth.loading) return <div className="booting">Loading…</div>;
+    if (!auth.session) return <SignIn />;
+    if (!auth.role) return <SignIn email={auth.email} noAccess onSignOut={auth.signOut} />;
+  }
+  return <Payroll auth={auth} />;
+}
+
+function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  // Without Supabase configured the app is a local tool, and whoever opens it
+  // owns their own copy — so everything is editable.
+  const canEdit = cloudEnabled ? auth.canEdit : true;
+  const [state, setState] = React.useState<AppState>(() => (cloudEnabled ? emptyState() : loadState() ?? emptyState()));
   const [hadSaved] = React.useState(() => loadState() !== null);
+  const [syncing, setSyncing] = React.useState(cloudEnabled);
   const [tab, setTab] = React.useState<Tab>('revenue');
   const [toast, setToast] = React.useState('');
   const fileRef = React.useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => { saveState(state); }, [state]);
+  React.useEffect(() => { if (!cloudEnabled) saveState(state); }, [state]);
 
   // A fresh browser starts from seed.json when the deployment ships one, so the
   // app opens on real periods instead of an empty month. It is data, not code —
   // replace the file to change what a new visitor sees.
   React.useEffect(() => {
-    if (hadSaved) return;
+    if (cloudEnabled || hadSaved) return;
     let cancelled = false;
     fetch('./seed.json')
       .then((r) => (r.ok ? r.json() : null))
@@ -44,36 +65,71 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Shared books: read from the database, and follow anyone else's edits.
+  const reload = React.useCallback(async () => {
+    const { periods, error } = await cloud.fetchPeriods();
+    if (error) { setToast(error); setSyncing(false); return; }
+    setState((s) => (periods.length ? cloud.stateFrom(periods, s.activePeriodId) : s));
+    setSyncing(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (!cloudEnabled) return;
+    void reload();
+    return cloud.watchPeriods(() => { void reload(); });
+  }, [reload]);
+
   const period = state.periods.find((p) => p.id === state.activePeriodId) ?? state.periods[0];
   const result = React.useMemo(() => computePeriod(period), [period]);
 
-  /** Edit the active period through a draft copy, keeping state immutable. */
-  const update = (fn: (p: Period) => void) =>
+  /** Edit the active period through a draft copy, keeping state immutable.
+   *  Shared edits are written back debounced, so typing does not become a write
+   *  per keystroke. */
+  const pending = React.useRef<Period | null>(null);
+  const flushTimer = React.useRef<number | undefined>(undefined);
+
+  const update = (fn: (p: Period) => void) => {
+    if (!canEdit) return;
     setState((s) => ({
       ...s,
       periods: s.periods.map((p) => {
         if (p.id !== period.id) return p;
         const draft = clone(p);
         fn(draft);
+        if (cloudEnabled) {
+          pending.current = draft;
+          window.clearTimeout(flushTimer.current);
+          flushTimer.current = window.setTimeout(async () => {
+            const toSave = pending.current;
+            pending.current = null;
+            if (!toSave) return;
+            const { error } = await cloud.savePeriod(toSave);
+            if (error) setToast(`Not saved: ${error}`);
+          }, 600);
+        }
         return draft;
       }),
     }));
+  };
 
-  const addPeriod = () => {
+  const addPeriod = async () => {
     const p = period.accounts.length ? rollForward(period) : newPeriod(defaultLabel(), period.usdToPkr);
     setState((s) => ({ ...s, periods: [...s.periods, p], activePeriodId: p.id }));
     setToast(period.accounts.length ? `${p.label} started from ${period.label}` : `Created ${p.label}`);
+    if (cloudEnabled) await cloud.savePeriod(p);
   };
 
-  const duplicatePeriod = () => {
+  const duplicatePeriod = async () => {
     const p = { ...clone(period), id: uid(), label: `${period.label} (copy)` };
     setState((s) => ({ ...s, periods: [...s.periods, p], activePeriodId: p.id }));
     setToast(`Duplicated ${period.label}`);
+    if (cloudEnabled) await cloud.savePeriod(p);
   };
 
-  const deletePeriod = () => {
+  const deletePeriod = async () => {
     if (state.periods.length === 1) return;
     if (!confirm(`Delete "${period.label}"? This cannot be undone.`)) return;
+    const removing = period.id;
     setState((s) => {
       const at = s.periods.findIndex((p) => p.id === period.id);
       const periods = s.periods.filter((p) => p.id !== period.id);
@@ -81,6 +137,10 @@ export default function App() {
       return { ...s, periods, activePeriodId: periods[Math.min(at, periods.length - 1)].id };
     });
     setToast('Period deleted');
+    if (cloudEnabled) {
+      const { error } = await cloud.deletePeriod(removing);
+      if (error) setToast(`Not deleted: ${error}`);
+    }
   };
 
   const onFile = async (file: File) => {
@@ -90,6 +150,10 @@ export default function App() {
         if (!restored.periods?.length) throw new Error('no periods in that backup');
         setState(restored);
         setToast(`Restored ${restored.periods.length} periods from backup`);
+        if (cloudEnabled) {
+          const { error } = await cloud.uploadPeriods(restored.periods);
+          if (error) setToast(`Restored locally, but not shared: ${error}`);
+        }
         return;
       }
       const periods = await importWorkbook(file);
@@ -102,6 +166,10 @@ export default function App() {
         activePeriodId: periods[periods.length - 1].id,
       }));
       setToast(`Imported ${periods.length} period${periods.length > 1 ? 's' : ''}`);
+      if (cloudEnabled) {
+        const { error } = await cloud.uploadPeriods(periods);
+        setToast(error ? `Imported, but not shared: ${error}` : `Imported ${periods.length} periods — shared with everyone who has access`);
+      }
     } catch (e) {
       setToast(`Could not read that file: ${(e as Error).message}`);
     }
@@ -123,6 +191,7 @@ export default function App() {
   };
 
   return (
+    <AccessContext.Provider value={canEdit}>
     <div className="app">
       <aside className="rail">
         <div className="wordmark">
@@ -148,15 +217,28 @@ export default function App() {
         </nav>
 
         <div className="rail-actions">
-          <button className="btn wide primary" onClick={addPeriod}>New period</button>
+          {canEdit && <button className="btn wide primary" onClick={addPeriod}>New period</button>}
           <input ref={fileRef} id="import-file" type="file" accept=".xlsx,.xls,.csv,.json" hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
-          <button className="btn wide" onClick={() => fileRef.current?.click()}>Import sheet or backup</button>
+          {canEdit && (
+            <button className="btn wide" onClick={() => fileRef.current?.click()}>Import sheet or backup</button>
+          )}
           <button className="btn wide" onClick={exportExcel}>Export Excel</button>
           <button className="btn wide" onClick={backup}>Download backup</button>
         </div>
 
-        <div className="rail-foot">Saved in this browser. Export before switching devices.</div>
+        {cloudEnabled ? (
+          <div className="rail-foot who">
+            <div className="who-email">{auth.email}</div>
+            <div className="who-role">
+              <span className={`role role-${auth.role}`}>{roleLabel(auth.role)}</span>
+              {syncing && <span className="syncing"> · loading…</span>}
+            </div>
+            <button className="link" onClick={auth.signOut}>Sign out</button>
+          </div>
+        ) : (
+          <div className="rail-foot">Saved in this browser. Export before switching devices.</div>
+        )}
       </aside>
 
       <main className="main">
@@ -169,8 +251,14 @@ export default function App() {
               onChange={(v) => update((d) => { d.usdToPkr = v; })} />
           </div>
           <div className="spacer" />
-          <button className="btn" onClick={duplicatePeriod}>Duplicate</button>
-          <button className="btn" onClick={deletePeriod} disabled={state.periods.length === 1}>Delete</button>
+          {canEdit ? (
+            <>
+              <button className="btn" onClick={duplicatePeriod}>Duplicate</button>
+              <button className="btn" onClick={deletePeriod} disabled={state.periods.length === 1}>Delete</button>
+            </>
+          ) : (
+            <span className="readonly-badge">View only</span>
+          )}
         </header>
 
         <dl className="figures">
@@ -191,24 +279,39 @@ export default function App() {
         )}
 
         <nav className="tabs">
-          {([['revenue', 'Revenue'], ['division', 'Division'], ['payouts', 'Payouts & settlement']] as const)
-            .map(([id, label]) => (
-              <button key={id} className={`tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id)}>
-                {label}
-              </button>
-            ))}
+          {([
+            ['revenue', 'Revenue'],
+            ['division', 'Division'],
+            ['payouts', 'Payouts & settlement'],
+            ...(auth.isSuperAdmin ? [['access', 'Access'] as const] : []),
+          ] as const).map(([id, label]) => (
+            <button key={id} className={`tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id as Tab)}>
+              {label}
+            </button>
+          ))}
         </nav>
 
         <div className="sheet">
           {tab === 'revenue' && <AccountsTable result={result} update={update} />}
           {tab === 'division' && <DivisionMatrix period={period} result={result} update={update} />}
           {tab === 'payouts' && <Ledger period={period} result={result} update={update} />}
+          {tab === 'access' && auth.isSuperAdmin && (
+            <People me={auth.email} onChanged={auth.refreshRole} />
+          )}
         </div>
       </main>
 
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
+    </AccessContext.Provider>
   );
+}
+
+function roleLabel(role: string | null) {
+  if (role === 'super_admin') return 'Administrator';
+  if (role === 'editor') return 'Can edit';
+  if (role === 'viewer') return 'View only';
+  return 'No access';
 }
 
 function Figure({ label, value, sub, lead, negative }: {

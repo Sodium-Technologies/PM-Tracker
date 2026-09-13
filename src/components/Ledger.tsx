@@ -1,14 +1,16 @@
 import type { LineItem, Period } from '../lib/types';
 import { fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
-import { NumberInput, TextInput } from './Fields';
+import { EditOnly, NumberInput, TextInput } from './Fields';
 import { uid } from '../lib/state';
 import { exportPayoutSheet } from '../lib/xlsx';
+import { useCanEdit } from '../lib/access';
 
 type Update = (fn: (p: Period) => void) => void;
 
 export default function Ledger({ period, result, update }: {
   period: Period; result: PeriodResult; update: Update;
 }) {
+  const canEdit = useCanEdit();
   const L = result.ledger;
   const accountName = (id: string) => period.accounts.find((a) => a.id === id)?.name ?? '';
 
@@ -55,6 +57,7 @@ export default function Ledger({ period, result, update }: {
                     <label className="check">
                       <input type="checkbox" checked={s.staff.retained}
                         aria-label={`${s.staff.name} kept local`}
+                        disabled={!canEdit}
                         onChange={(e) => update((d) => {
                           const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.retained = e.target.checked;
                         })} />
@@ -132,9 +135,11 @@ export default function Ledger({ period, result, update }: {
         <section className="panel">
           <div className="panel-head">
             <h2>Transfers made</h2>
-            <button className="btn" onClick={() => update((d) => d.transfers.push({
-              id: uid(), label: 'Transfer', amountPkr: 0, date: new Date().toISOString().slice(0, 10),
-            }))}>Add</button>
+            <EditOnly>
+              <button className="btn" onClick={() => update((d) => d.transfers.push({
+                id: uid(), label: 'Transfer', amountPkr: 0, date: new Date().toISOString().slice(0, 10),
+              }))}>Add</button>
+            </EditOnly>
           </div>
           <table>
             <tbody>
@@ -143,7 +148,7 @@ export default function Ledger({ period, result, update }: {
                   <td><TextInput value={t.label}
                     onChange={(v) => update((d) => { const x = d.transfers.find((y) => y.id === t.id); if (x) x.label = v; })} /></td>
                   <td>
-                    <input className="cell-input" type="date" value={t.date} aria-label="Transfer date"
+                    <input className="cell-input" type="date" value={t.date} aria-label="Transfer date" readOnly={!canEdit}
                       onChange={(e) => update((d) => { const x = d.transfers.find((y) => y.id === t.id); if (x) x.date = e.target.value; })} />
                   </td>
                   <td className="fig">
@@ -151,9 +156,11 @@ export default function Ledger({ period, result, update }: {
                       onChange={(v) => update((d) => { const x = d.transfers.find((y) => y.id === t.id); if (x) x.amountPkr = v; })} />
                   </td>
                   <td>
-                    <button className="btn icon" aria-label={`Remove ${t.label}`} onClick={() => update((d) => {
-                      d.transfers = d.transfers.filter((y) => y.id !== t.id);
-                    })}>×</button>
+                    <EditOnly>
+                      <button className="btn icon" aria-label={`Remove ${t.label}`} onClick={() => update((d) => {
+                        d.transfers = d.transfers.filter((y) => y.id !== t.id);
+                      })}>×</button>
+                    </EditOnly>
                   </td>
                 </tr>
               ))}
@@ -183,7 +190,7 @@ function LineItems({ title, hint, rows, usd, period, onAdd, onLabel, onAmount, o
     <section className="panel">
       <div className="panel-head">
         <h2>{title} {hint && <span className="hint">{hint}</span>}</h2>
-        <button className="btn" onClick={onAdd}>Add</button>
+        <EditOnly><button className="btn" onClick={onAdd}>Add</button></EditOnly>
       </div>
       <table>
         <tbody>
@@ -199,7 +206,9 @@ function LineItems({ title, hint, rows, usd, period, onAdd, onLabel, onAmount, o
                 </td>
                 <td className="fig mono sub">{u ? fmtPkr(round2(u.amountUsd * period.usdToPkr)) : ''}</td>
                 <td>
-                  <button className="btn icon" aria-label={`Remove ${r.label}`} onClick={() => onRemove(r.id)}>×</button>
+                  <EditOnly>
+                    <button className="btn icon" aria-label={`Remove ${r.label}`} onClick={() => onRemove(r.id)}>×</button>
+                  </EditOnly>
                 </td>
               </tr>
             );

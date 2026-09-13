@@ -1,14 +1,17 @@
 import React from 'react';
+import { useCanEdit } from '../lib/access';
 
 export function TextInput({ id, value, onChange, placeholder, className = '' }: {
   id?: string; value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
 }) {
+  const canEdit = useCanEdit();
   return (
     <input
       id={id}
       className={`cell-input ${className}`}
       value={value}
       placeholder={placeholder}
+      readOnly={!canEdit}
       onChange={(e) => onChange(e.target.value)}
     />
   );
@@ -20,6 +23,7 @@ export function NumberInput({ id, value, onChange, unit, width = 72, step = 'any
   id?: string; value: number; onChange: (v: number) => void;
   unit?: string; width?: number; step?: string;
 }) {
+  const canEdit = useCanEdit();
   const [draft, setDraft] = React.useState<string | null>(null);
   const shown = draft ?? (Number.isFinite(value) ? String(value) : '');
   return (
@@ -30,6 +34,7 @@ export function NumberInput({ id, value, onChange, unit, width = 72, step = 'any
         style={{ width, minWidth: width }}
         type="number"
         step={step}
+        readOnly={!canEdit}
         value={shown}
         onChange={(e) => {
           setDraft(e.target.value);
@@ -48,12 +53,14 @@ export function NumberInput({ id, value, onChange, unit, width = 72, step = 'any
 export function EntriesInput({ id, entries, onChange }: {
   id?: string; entries: number[]; onChange: (v: number[]) => void;
 }) {
+  const canEdit = useCanEdit();
   const [draft, setDraft] = React.useState<string | null>(null);
   const shown = draft ?? entries.filter((e) => e !== 0 || entries.length === 1).join(' + ');
   return (
     <input
       id={id}
       className="cell-input num entries"
+      readOnly={!canEdit}
       value={shown}
       placeholder="20 + 20 + 20"
       title="Each time entry, separated by +"
@@ -68,4 +75,9 @@ export function EntriesInput({ id, entries, onChange }: {
       onBlur={() => setDraft(null)}
     />
   );
+}
+
+/** Wraps an action only an editor should see — add, remove, split evenly. */
+export function EditOnly({ children }: { children: React.ReactNode }) {
+  return useCanEdit() ? <>{children}</> : null;
 }

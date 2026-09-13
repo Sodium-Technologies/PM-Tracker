@@ -1,13 +1,15 @@
 import type { Account, Period } from '../lib/types';
 import { STATUS_OPTIONS } from '../lib/types';
 import { fmtNum, fmtPkr, fmtUsd, type PeriodResult } from '../lib/calc';
-import { EntriesInput, NumberInput, TextInput } from './Fields';
+import { EditOnly, EntriesInput, NumberInput, TextInput } from './Fields';
 import { newAccount } from '../lib/state';
+import { useCanEdit } from '../lib/access';
 
 export default function AccountsTable({ result, update }: {
   result: PeriodResult;
   update: (fn: (p: Period) => void) => void;
 }) {
+  const canEdit = useCanEdit();
   const patch = (id: string, p: Partial<Account>) =>
     update((d) => {
       const a = d.accounts.find((x) => x.id === id);
@@ -22,9 +24,11 @@ export default function AccountsTable({ result, update }: {
         <h2>
           Revenue by account <span className="hint">rate × time, less the fee deduction</span>
         </h2>
-        <button className="btn" onClick={() => update((d) => d.accounts.push(newAccount()))}>
-          Add account
-        </button>
+        <EditOnly>
+          <button className="btn" onClick={() => update((d) => d.accounts.push(newAccount()))}>
+            Add account
+          </button>
+        </EditOnly>
       </div>
       <div className="scroll">
         <table>
@@ -85,6 +89,7 @@ export default function AccountsTable({ result, update }: {
                   <td className="fig mono">{fmtPkr(r.companyPkr)}</td>
                   <td>
                     <select
+                      disabled={!canEdit}
                       className={`pill s-${a.status.replace(/\s+/g, '-').toLowerCase()}`}
                       value={STATUS_OPTIONS.includes(a.status) ? a.status : 'Pending'}
                       onChange={(e) => patch(a.id, { status: e.target.value })}
@@ -93,11 +98,13 @@ export default function AccountsTable({ result, update }: {
                     </select>
                   </td>
                   <td>
+                    <EditOnly>
                     <button className="btn icon" title={`Remove ${a.name}`} aria-label={`Remove ${a.name}`}
                       onClick={() => update((d) => {
                         d.accounts = d.accounts.filter((x) => x.id !== a.id);
                         d.staff.forEach((s) => delete s.shares[a.id]);
                       })}>×</button>
+                    </EditOnly>
                   </td>
                 </tr>
               );

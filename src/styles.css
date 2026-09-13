@@ -537,3 +537,108 @@ td.owner .cell-input { min-width: 92px; }
   .head, .tabs, .sheet { padding-left: 16px; padding-right: 16px; }
   .figure { padding: 12px 16px; }
 }
+
+/* ---------- sign-in and access ---------- */
+
+.booting {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+  background: var(--paper);
+}
+
+.signin {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: var(--paper);
+}
+.signin-card {
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 26px 24px 22px;
+  box-shadow: var(--shadow);
+}
+.signin-card h1 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.signin-card p { margin: 0 0 16px; color: var(--ink-soft); font-size: 13.5px; }
+.signin-form { display: flex; flex-direction: column; gap: 7px; }
+.signin-form label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.signin-form input {
+  padding: 8px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.signin-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.signin-form .btn { margin-top: 4px; padding: 8px 12px; }
+.signin-error { color: var(--bad); font-size: 12.5px; margin: 12px 0 0; }
+.signin-note { margin: 16px 0 0; font-size: 12px; color: var(--ink-faint); }
+
+.who { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.who-email { color: var(--ink-soft); word-break: break-all; }
+.role {
+  display: inline-block;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+.role-super_admin { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--rule)); }
+.role-editor { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--rule)); }
+.role-viewer { color: var(--ink-soft); }
+.syncing { color: var(--ink-faint); }
+
+.readonly-badge {
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.grant {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.grant .cell-input.bordered {
+  border-color: var(--rule-strong);
+  background: var(--surface);
+  width: auto;
+  min-width: 200px;
+  flex: 1;
+  padding: 6px 9px;
+}
+.grant select.cell-input { min-width: 130px; flex: none; }
+
+.panel-foot {
+  margin: 0;
+  padding: 10px 14px 14px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--rule);
+}
+
+/* A locked control still has to be readable — this is a record, not a form. */
+.cell-input[readonly] { cursor: default; }
+.cell-input[readonly]:hover { border-color: transparent; }

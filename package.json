@@ -11,9 +11,11 @@
     "typecheck": "tsc -b --noEmit false --pretty",
     "e2e": "node scripts/e2e.mjs",
     "retemplate": "esbuild scripts/retemplate.ts --bundle --platform=node --outfile=node_modules/.cache/retemplate.cjs --log-level=error && node node_modules/.cache/retemplate.cjs",
-    "seed": "esbuild scripts/seed.ts --bundle --platform=node --outfile=node_modules/.cache/seed.cjs --log-level=error && node node_modules/.cache/seed.cjs"
+    "seed": "esbuild scripts/seed.ts --bundle --platform=node --outfile=node_modules/.cache/seed.cjs --log-level=error && node node_modules/.cache/seed.cjs",
+    "e2e:auth": "node scripts/e2e-auth.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "xlsx": "^0.18.5"

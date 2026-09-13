@@ -1,0 +1,166 @@
+/**
+ * Access-control check for a Supabase-configured build.
+ *
+ *   VITE_SUPABASE_URL=https://stub.supabase.co VITE_SUPABASE_ANON_KEY=stub-key npm run build
+ *   node scripts/e2e-auth.mjs
+ *
+ * Supabase itself is stubbed at the network boundary: this proves what the page
+ * does with each answer — signed out, signed in without access, viewer, editor,
+ * administrator — not what the database decides. The database's own rules live
+ * in supabase/schema.sql and are enforced there, whatever this page renders.
+ */
+import { chromium } from 'playwright';
+import { createServer } from 'http';
+import { readFileSync, existsSync } from 'fs';
+import { extname, join } from 'path';
+
+const root = new URL('../dist', import.meta.url).pathname;
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+const srv = createServer((req, res) => {
+  const p = join(root, req.url === '/' ? 'index.html' : req.url.split('?')[0]);
+  if (!existsSync(p)) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { 'Content-Type': types[extname(p)] || 'application/octet-stream' });
+  res.end(readFileSync(p));
+}).listen(5610);
+
+const ORIGIN = 'http://localhost:5610';
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+
+let failures = 0;
+const ok = (label, cond, detail = '') => {
+  if (!cond) failures++;
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? ' — ' + detail : ''}`);
+};
+
+const session = (email) => ({
+  access_token: 'stub-access-token',
+  token_type: 'bearer',
+  expires_in: 3600,
+  expires_at: Math.floor(Date.now() / 1000) + 3600,
+  refresh_token: 'stub-refresh-token',
+  user: { id: 'stub-user', email, aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {} },
+});
+
+/** Open the app with Supabase stubbed: `role` null means "not on the list". */
+async function open({ email, role, periods = [] }) {
+  const ctx = await browser.newContext();
+  await ctx.route('**/stub.supabase.co/**', async (route) => {
+    const url = route.request().url();
+    const json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (url.includes('/auth/v1/otp')) return json({});
+    if (url.includes('/auth/v1/token')) return json(session(email ?? 'nobody@example.com'));
+    if (url.includes('/auth/v1/user')) return json(session(email ?? 'nobody@example.com').user);
+    if (url.includes('/auth/v1/logout')) return route.fulfill({ status: 204, body: '' });
+    if (url.includes('/rest/v1/app_users')) {
+      if (route.request().method() !== 'GET') return json([]);
+      return json(role ? [{ email, role, created_at: '2026-01-01' }] : []);
+    }
+    if (url.includes('/rest/v1/periods')) {
+      if (route.request().method() !== 'GET') return json([]);
+      return json(periods.map((p) => ({ id: p.id, label: p.label, data: p })));
+    }
+    return json({});
+  });
+  if (email) {
+    await ctx.addInitScript((s) => {
+      // supabase-js restores its session from localStorage before any network call
+      for (const key of ['sb-stub-auth-token', 'sb-localhost-auth-token']) {
+        window.localStorage.setItem(key, JSON.stringify(s));
+      }
+    }, session(email));
+  }
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(ORIGIN, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(800);
+  return { page, ctx, errors };
+}
+
+const samplePeriod = {
+  id: 'p1', label: 'September 2026', usdToPkr: 270,
+  accounts: [{
+    id: 'a1', name: 'Luxe', owner: 'Outside', currency: 'USD', rate: 10, entries: [20, 20, 20, 20],
+    feePct: 0, adjustmentUsd: 0, freelancerPct: 70, status: 'Pending', notes: '',
+  }],
+  staff: [{ id: 's1', name: 'Naveed', shares: { a1: 1 }, adjustmentPkr: 0, retained: false, notes: '' }],
+  reimbursements: [], otherPayables: [], withheld: [], transfers: [],
+};
+
+// 1. signed out
+{
+  const { page, ctx, errors } = await open({});
+  ok('signed out shows the sign-in screen', await page.locator('.signin-card').isVisible());
+  ok('signed out shows no figures', (await page.locator('.figure').count()) === 0);
+  ok('sign-in asks for an email', await page.locator('#signin-email').isVisible());
+  await page.locator('#signin-email').fill('partner@company.com');
+  await page.getByRole('button', { name: /sign-in link/i }).click();
+  await page.waitForTimeout(400);
+  ok('requesting a link confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
+  ok('no page errors while signed out', errors.length === 0, errors.join('; '));
+  await ctx.close();
+}
+
+// 2. signed in, not on the access list
+{
+  const { page, ctx } = await open({ email: 'stranger@example.com', role: null, periods: [samplePeriod] });
+  const text = await page.locator('.signin-card').innerText();
+  ok('an address with no access is told so', text.includes('No access yet'));
+  ok('an address with no access sees no figures', (await page.locator('.figure').count()) === 0);
+  await ctx.close();
+}
+
+// 3. viewer
+{
+  const { page, ctx, errors } = await open({ email: 'partner@company.com', role: 'viewer', periods: [samplePeriod] });
+  ok('viewer sees the books', (await page.locator('.figure').count()) > 0);
+  ok('viewer sees the shared period', (await page.locator('.period').innerText()).includes('September 2026'));
+  ok('viewer is labelled view only', (await page.locator('.role').innerText()).trim() === 'View only');
+  ok('viewer gets no New period button', (await page.getByRole('button', { name: 'New period' }).count()) === 0);
+  ok('viewer gets no Import button', (await page.getByRole('button', { name: /Import sheet/ }).count()) === 0);
+  ok('viewer gets no Delete button', (await page.getByRole('button', { name: 'Delete' }).count()) === 0);
+  ok('viewer gets no Access tab', (await page.getByRole('button', { name: 'Access' }).count()) === 0);
+  ok('viewer sees the view-only badge', await page.locator('.readonly-badge').isVisible());
+  const rate = page.locator('table tbody tr').first().locator('input').nth(2);
+  ok('figure inputs are locked for a viewer', await rate.getAttribute('readonly') !== null);
+  const before = await rate.inputValue();
+  await rate.fill('999').catch(() => {});
+  ok('a viewer cannot change a figure', (await rate.inputValue()) === before,
+     `was ${before}, now ${await rate.inputValue()}`);
+  ok('viewer can still export', (await page.getByRole('button', { name: 'Export Excel' }).count()) === 1);
+  ok('no page errors for a viewer', errors.length === 0, errors.join('; '));
+  await ctx.close();
+}
+
+// 4. editor
+{
+  const { page, ctx } = await open({ email: 'editor@company.com', role: 'editor', periods: [samplePeriod] });
+  ok('editor is labelled can edit', (await page.locator('.role').innerText()).trim() === 'Can edit');
+  ok('editor gets New period', (await page.getByRole('button', { name: 'New period' }).count()) === 1);
+  ok('editor gets no Access tab', (await page.getByRole('button', { name: 'Access' }).count()) === 0);
+  const rate = page.locator('table tbody tr').first().locator('input').nth(2);
+  ok('figure inputs are editable for an editor', await rate.getAttribute('readonly') === null);
+  await ctx.close();
+}
+
+// 5. super admin
+{
+  const { page, ctx, errors } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod] });
+  ok('administrator is labelled administrator', (await page.locator('.role').innerText()).trim() === 'Administrator');
+  ok('administrator gets the Access tab', (await page.getByRole('button', { name: 'Access' }).count()) === 1);
+  await page.getByRole('button', { name: 'Access' }).click();
+  await page.waitForTimeout(400);
+  ok('access tab offers to add someone', await page.locator('#grant-email').isVisible());
+  ok('access tab lists the three levels',
+    (await page.locator('.settle .row').count()) === 3,
+    (await page.locator('.settle dt').allInnerTexts()).join(', '));
+  ok('administrator cannot change their own row',
+    await page.locator('table tbody tr').first().locator('select').isDisabled());
+  ok('no page errors for an administrator', errors.length === 0, errors.join('; '));
+  await ctx.close();
+}
+
+console.log(failures ? `\n${failures} check(s) failed` : '\nAll access checks passed');
+await browser.close();
+srv.close();
+process.exit(failures ? 1 : 0);
