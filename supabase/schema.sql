@@ -1,18 +1,20 @@
 -- PM Payroll — access control and shared data.
 --
--- Run this once in the Supabase SQL editor (Dashboard → SQL Editor → New query).
--- It is safe to run again: every statement is idempotent.
+-- Run once in Supabase: Dashboard → SQL Editor → New query → paste → Run.
+-- Safe to run again; every statement is idempotent.
+--
+-- THE ONLY LINE YOU MAY NEED TO CHANGE is the admin_email on line 30.
 --
 -- Three roles:
---   super_admin  manages who has access, and edits the books
+--   super_admin  edits the books and decides who has access
 --   editor       edits the books
 --   viewer       reads the books, changes nothing
 --
--- Access is enforced by row-level security in the database, not by the page.
--- A viewer who opens dev tools and calls the API directly still cannot write,
--- and someone with no row in app_users sees nothing at all.
+-- Access is enforced by row-level security in the database, not by the page:
+-- a viewer calling the API directly still cannot write, and an address that is
+-- not listed here reads nothing at all.
 
--- ---------------------------------------------------------------- who has access
+-- ---------------------------------------------------------------- 1. who has access
 
 create table if not exists public.app_users (
   email      text primary key,
@@ -21,10 +23,22 @@ create table if not exists public.app_users (
   created_by text
 );
 
+-- The first administrator. Without this row nobody can administer anything,
+-- including you — so set it to the address you will sign in with.
+do $$
+declare
+  admin_email text := 'nav8khan@gmail.com';   -- <<< CHANGE THIS
+begin
+  insert into public.app_users (email, role)
+  values (lower(trim(admin_email)), 'super_admin')
+  on conflict (email) do update set role = 'super_admin';
+end
+$$;
+
 alter table public.app_users enable row level security;
 
--- The caller's role, read without RLS so policies can use it without recursing
--- into the same table they protect.
+-- The caller's role, read without RLS so the policies below can use it without
+-- recursing into the table they protect.
 create or replace function public.member_role()
 returns text
 language sql
@@ -60,8 +74,8 @@ create policy app_users_update on public.app_users
   using (public.member_role() = 'super_admin')
   with check (public.member_role() = 'super_admin');
 
--- A super admin may remove anyone but themselves: deleting your own row would
--- lock the last administrator out of the account.
+-- An administrator may remove anyone but themselves: deleting your own row
+-- would lock the last administrator out of the account.
 drop policy if exists app_users_delete on public.app_users;
 create policy app_users_delete on public.app_users
   for delete to authenticated
@@ -70,7 +84,7 @@ create policy app_users_delete on public.app_users
     and lower(email) <> lower(auth.jwt() ->> 'email')
   );
 
--- ---------------------------------------------------------------- the books
+-- ---------------------------------------------------------------- 2. the books
 
 create table if not exists public.periods (
   id         text primary key,
@@ -103,8 +117,11 @@ create policy periods_delete on public.periods
   for delete to authenticated
   using (public.member_role() in ('super_admin', 'editor'));
 
+-- Stamp who last touched a period, and when.
 create or replace function public.touch_updated_at()
-returns trigger language plpgsql as $$
+returns trigger
+language plpgsql
+as $$
 begin
   new.updated_at := now();
   new.updated_by := coalesce(auth.jwt() ->> 'email', new.updated_by);
@@ -113,7 +130,8 @@ end
 $$;
 
 drop trigger if exists periods_touch on public.periods;
-create trigger periods_touch before insert or update on public.periods
+create trigger periods_touch
+  before insert or update on public.periods
   for each row execute function public.touch_updated_at();
 
 -- Live updates between people working at the same time. Harmless if the
@@ -127,11 +145,7 @@ exception
 end
 $$;
 
--- ---------------------------------------------------------------- first administrator
---
--- CHANGE THIS EMAIL to the address you sign in with, then run the file.
--- Without this row nobody can administer anything, including you.
+-- ---------------------------------------------------------------- 3. check it worked
 
-insert into public.app_users (email, role)
-values ('nav8khan@gmail.com', 'super_admin')
-on conflict (email) do update set role = 'super_admin';
+-- Should return one row: your address, as super_admin.
+select email, role, created_at from public.app_users order by created_at;
