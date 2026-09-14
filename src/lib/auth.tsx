@@ -42,10 +42,13 @@ export function useAuth(): Auth {
     // not answer". Telling an administrator the first when it is the second
     // sends them looking for the wrong problem.
     try {
+      // Match exactly. `ilike` would treat `_` and `%` in an address as
+      // wildcards, so nav_khan@… could match navXkhan@… — wrong row, wrong
+      // role. Addresses are stored lowercase, so compare lowercase.
       const { data, error: err } = await supabase
         .from('app_users')
         .select('role')
-        .ilike('email', email)
+        .eq('email', email.trim().toLowerCase())
         .maybeSingle();
       if (err) { setError(err.message); return; }
       setError(null);
@@ -99,6 +102,34 @@ export function useAuth(): Auth {
   };
 }
 
+/** A sign-in link that fails comes back as an error in the URL rather than a
+ *  session. Without this the page just shows the sign-in form again, which reads
+ *  as "sign-in is broken" instead of "that link expired". */
+export function signInErrorFromUrl(): string | null {
+  const read = (s: string) => new URLSearchParams(s);
+  const query = read(window.location.search);
+  const hash = read(window.location.hash.replace(/^#/, ''));
+  const code = query.get('error') ?? hash.get('error');
+  if (!code) return null;
+  const description = (query.get('error_description') ?? hash.get('error_description') ?? '')
+    .replace(/\+/g, ' ');
+  // Check the specific cause before the generic one: a PKCE failure arrives as
+  // `invalid_request`, which would otherwise be read as an expired link.
+  if (/flow_state|code verifier|pkce/i.test(code + description))
+    return 'That link was opened in a different browser from the one that requested it. '
+      + 'Request a new link and open it in this browser.';
+  if (/expired|invalid|otp/i.test(code + description))
+    return 'That sign-in link has expired or was already used. Request a new one below.';
+  return description || `Sign-in failed: ${code}`;
+}
+
+/** Clear the error out of the address bar so a reload does not repeat it. */
+export function clearUrlError() {
+  if (window.location.search || window.location.hash) {
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}
+
 /** Send a one-time sign-in link. No passwords to set, forget, or leak. */
 export async function sendSignInLink(email: string): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Sign-in is not configured for this deployment.' };
@@ -126,6 +157,11 @@ export async function grantAccess(email: string, role: Role, by: string | null) 
 
 export async function revokeAccess(email: string) {
   if (!supabase) return { error: 'not configured' };
-  const { error } = await supabase.from('app_users').delete().ilike('email', email);
+  // Exact match, for the same reason as the lookup: a wildcard here would
+  // revoke somebody else.
+  const { error } = await supabase
+    .from('app_users')
+    .delete()
+    .eq('email', email.trim().toLowerCase());
   return { error: error?.message };
 }

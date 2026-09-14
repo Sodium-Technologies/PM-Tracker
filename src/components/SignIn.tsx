@@ -1,5 +1,5 @@
 import React from 'react';
-import { sendSignInLink } from '../lib/auth';
+import { clearUrlError, sendSignInLink, signInErrorFromUrl } from '../lib/auth';
 
 /** Sign-in, and the two states that follow it: link sent, and signed in without
  *  access. Nothing here decides anything — the database does — so this screen
@@ -13,7 +13,9 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
   const [address, setAddress] = React.useState('');
   const [sent, setSent] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState('');
+  const [error, setError] = React.useState(() => signInErrorFromUrl() ?? '');
+
+  React.useEffect(() => { if (error) clearUrlError(); }, [error]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

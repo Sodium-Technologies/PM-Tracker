@@ -18,7 +18,10 @@ mkdirSync(OUT, { recursive: true });
 const root = new URL('../dist', import.meta.url).pathname;
 const types = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css' };
 const srv = createServer((req,res)=>{
-  const p = join(root, req.url === '/' ? 'index.html' : req.url.split('?')[0]);
+  // Strip the query before mapping to a file, or '/?error=…' resolves to the
+  // directory itself.
+  const path = req.url.split('?')[0];
+  const p = join(root, path === '/' ? 'index.html' : path);
   if (!existsSync(p)) { res.writeHead(404); return res.end(); }
   res.writeHead(200, {'Content-Type': types[extname(p)] || 'application/octet-stream'});
   res.end(readFileSync(p));

@@ -17,7 +17,10 @@ import { extname, join } from 'path';
 const root = new URL('../dist', import.meta.url).pathname;
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 const srv = createServer((req, res) => {
-  const p = join(root, req.url === '/' ? 'index.html' : req.url.split('?')[0]);
+  // Strip the query before mapping to a file, or '/?error=…' resolves to the
+  // directory itself.
+  const path = req.url.split('?')[0];
+  const p = join(root, path === '/' ? 'index.html' : path);
   if (!existsSync(p)) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'Content-Type': types[extname(p)] || 'application/octet-stream' });
   res.end(readFileSync(p));
@@ -44,7 +47,7 @@ const session = (email) => ({
 /** Open the app with Supabase stubbed: `role` null means "not on the list".
  *  `down: true` makes every call to the project fail, as an unreachable or
  *  paused project does. */
-async function open({ email, role, periods = [], down = false }) {
+async function open({ email, role, periods = [], down = false, path = '' }) {
   const ctx = await browser.newContext();
   await ctx.route('**/stub.supabase.co/**', async (route) => {
     if (down) return route.abort('connectionrefused');
@@ -75,7 +78,7 @@ async function open({ email, role, periods = [], down = false }) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(ORIGIN, { waitUntil: 'networkidle' });
+  await page.goto(ORIGIN + path, { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
   return { page, ctx, errors };
 }
@@ -163,7 +166,24 @@ const samplePeriod = {
   await ctx.close();
 }
 
-// 6. configured, but the project cannot be reached
+// 6. a sign-in link that failed, reported back in the URL
+{
+  const { page, ctx } = await open({ path: '/?error=access_denied&error_description=Email+link+is+invalid+or+has+expired' });
+  const text = await page.locator('.signin-card').innerText();
+  ok('an expired link explains itself', /expired or was already used/.test(text), text.split('\n').slice(-2)[0]);
+  ok('an expired link still offers a new one', await page.locator('#signin-email').isVisible());
+  ok('the error is cleared from the address bar', !(await page.evaluate(() => window.location.search)));
+  await ctx.close();
+}
+
+{
+  const { page, ctx } = await open({ path: '/?error=invalid_request&error_description=code+verifier+should+be+non-empty' });
+  const text = await page.locator('.signin-card').innerText();
+  ok('a link opened in another browser says so', /different browser/.test(text), text.split('\n').slice(-2)[0]);
+  await ctx.close();
+}
+
+// 7. configured, but the project cannot be reached
 {
   const { page, ctx } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', down: true });
   const text = await page.locator('.signin-card').innerText();
