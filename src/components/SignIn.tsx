@@ -1,9 +1,10 @@
 import React from 'react';
-import { clearUrlError, sendSignInLink, signInErrorFromUrl } from '../lib/auth';
+import { clearUrlError, sendSignInLink, signInErrorFromUrl, signInWithCode } from '../lib/auth';
 
-/** Sign-in, and the two states that follow it: link sent, and signed in without
- *  access. Nothing here decides anything — the database does — so this screen
- *  only has to be clear about what happened. */
+/** Sign-in, and the states that follow it: code entry, no access, and a
+ *  deployment whose sign-in service cannot be reached. Nothing here decides
+ *  anything — the database does — so this screen only has to be clear about
+ *  what happened. */
 export default function SignIn({ email, noAccess, configError, onSignOut }: {
   email?: string | null;
   noAccess?: boolean;
@@ -11,13 +12,14 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
   onSignOut?: () => void;
 }) {
   const [address, setAddress] = React.useState('');
+  const [code, setCode] = React.useState('');
   const [sent, setSent] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState(() => signInErrorFromUrl() ?? '');
 
   React.useEffect(() => { if (error) clearUrlError(); }, [error]);
 
-  const submit = async (e: React.FormEvent) => {
+  const request = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address.trim()) return;
     setBusy(true);
@@ -26,6 +28,18 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
     setBusy(false);
     if (err) setError(err);
     else setSent(true);
+  };
+
+  const submitCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setBusy(true);
+    setError('');
+    const { error: err } = await signInWithCode(address, code);
+    setBusy(false);
+    // On success the session arrives through onAuthStateChange and this screen
+    // is replaced, so there is nothing to do here.
+    if (err) setError(err);
   };
 
   if (configError) {
@@ -64,10 +78,33 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
       <Frame>
         <h1>Check your email</h1>
         <p>
-          A sign-in link is on its way to <b>{address}</b>. Opening it on this device
-          signs you in. The link works once and expires shortly.
+          Sent to <b>{address}</b>. Enter the six-digit code from that email — it signs
+          you in right here, on this device.
         </p>
-        <button className="btn" onClick={() => { setSent(false); setAddress(''); }}>
+        <form onSubmit={submitCode} className="signin-form">
+          <label htmlFor="signin-code">Six-digit code</label>
+          <input
+            id="signin-code"
+            className="code-input"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={8}
+            required
+            value={code}
+            placeholder="123456"
+            onChange={(e) => setCode(e.target.value)}
+          />
+          <button className="btn primary" type="submit" disabled={busy}>
+            {busy ? 'Checking…' : 'Sign in'}
+          </button>
+        </form>
+        {error && <p className="signin-error">{error}</p>}
+        <p className="signin-note">
+          The same email also has a link. The code is the reliable one — a link can be
+          opened by a mail scanner before you get to it, or land in a different browser
+          from the one that asked for it.
+        </p>
+        <button className="link" onClick={() => { setSent(false); setCode(''); setError(''); }}>
           Use a different address
         </button>
       </Frame>
@@ -78,7 +115,7 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
     <Frame>
       <h1>PM Payroll</h1>
       <p>Sign in with the email address you were given access on.</p>
-      <form onSubmit={submit} className="signin-form">
+      <form onSubmit={request} className="signin-form">
         <label htmlFor="signin-email">Email address</label>
         <input
           id="signin-email"
@@ -90,13 +127,13 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
           onChange={(e) => setAddress(e.target.value)}
         />
         <button className="btn primary" type="submit" disabled={busy}>
-          {busy ? 'Sending…' : 'Email me a sign-in link'}
+          {busy ? 'Sending…' : 'Email me a sign-in code'}
         </button>
       </form>
       {error && <p className="signin-error">{error}</p>}
       <p className="signin-note">
-        No password to remember: the link in the email is the sign-in. Access to the
-        figures is granted per address by the administrator.
+        No password to remember. Access to the figures is granted per address by the
+        administrator.
       </p>
     </Frame>
   );

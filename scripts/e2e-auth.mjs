@@ -54,6 +54,16 @@ async function open({ email, role, periods = [], down = false, path = '' }) {
     const url = route.request().url();
     const json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     if (url.includes('/auth/v1/otp')) return json({});
+    if (url.includes('/auth/v1/verify')) {
+      const body = JSON.parse(route.request().postData() || '{}');
+      // The stub accepts one code, so the page's success and failure paths are
+      // both exercised.
+      if (body.token === '123456') return json(session(body.email));
+      return route.fulfill({
+        status: 403, contentType: 'application/json',
+        body: JSON.stringify({ error: 'invalid_grant', error_description: 'Token has expired or is invalid' }),
+      });
+    }
     if (url.includes('/auth/v1/token')) return json(session(email ?? 'nobody@example.com'));
     if (url.includes('/auth/v1/user')) return json(session(email ?? 'nobody@example.com').user);
     if (url.includes('/auth/v1/logout')) return route.fulfill({ status: 204, body: '' });
@@ -100,9 +110,23 @@ const samplePeriod = {
   ok('signed out shows no figures', (await page.locator('.figure').count()) === 0);
   ok('sign-in asks for an email', await page.locator('#signin-email').isVisible());
   await page.locator('#signin-email').fill('partner@company.com');
-  await page.getByRole('button', { name: /sign-in link/i }).click();
+  await page.getByRole('button', { name: /sign-in code/i }).click();
   await page.waitForTimeout(400);
-  ok('requesting a link confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
+  ok('requesting a code confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
+  ok('a code entry box is offered', await page.locator('#signin-code').isVisible());
+
+  await page.locator('#signin-code').fill('000000');
+  await page.getByRole('button', { name: /^Sign in$/ }).click();
+  await page.waitForTimeout(500);
+  ok('a wrong code is rejected with a reason',
+     /wrong or has expired/.test(await page.locator('.signin-card').innerText()));
+
+  await page.locator('#signin-code').fill('123456');
+  await page.getByRole('button', { name: /^Sign in$/ }).click();
+  await page.waitForTimeout(900);
+  ok('the right code signs in without touching a redirect URL',
+     (await page.locator('.signin-card').count()) === 0 || !(await page.locator('#signin-code').isVisible()),
+     (await page.locator('h1').first().innerText().catch(() => 'signed in')));
   ok('no page errors while signed out', errors.length === 0, errors.join('; '));
   await ctx.close();
 }

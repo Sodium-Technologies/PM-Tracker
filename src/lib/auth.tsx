@@ -130,7 +130,7 @@ export function clearUrlError() {
   }
 }
 
-/** Send a one-time sign-in link. No passwords to set, forget, or leak. */
+/** Send the sign-in email. It carries both a link and a six-digit code. */
 export async function sendSignInLink(email: string): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Sign-in is not configured for this deployment.' };
   const { error } = await supabase.auth.signInWithOtp({
@@ -138,6 +138,27 @@ export async function sendSignInLink(email: string): Promise<{ error?: string }>
     options: { emailRedirectTo: window.location.origin + window.location.pathname },
   });
   return error ? { error: error.message } : {};
+}
+
+/** Sign in with the code from the email instead of the link.
+ *
+ *  The link depends on the project's Site URL and redirect list being right, on
+ *  the same browser holding the verifier, and on no mail scanner having opened
+ *  it first — each of which silently breaks sign-in for everyone. The code
+ *  depends on none of that: it is typed into the page that asked for it. */
+export async function signInWithCode(email: string, token: string): Promise<{ error?: string }> {
+  if (!supabase) return { error: 'Sign-in is not configured for this deployment.' };
+  const { error } = await supabase.auth.verifyOtp({
+    email: email.trim(),
+    token: token.trim(),
+    type: 'email',
+  });
+  if (!error) return {};
+  return {
+    error: /expired|invalid/i.test(error.message)
+      ? 'That code is wrong or has expired. Request a new one.'
+      : error.message,
+  };
 }
 
 /** The access list. Readable in full only by a super admin. */

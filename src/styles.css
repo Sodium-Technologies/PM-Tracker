@@ -661,3 +661,18 @@ td.owner .cell-input { min-width: 92px; }
   padding: 1px 4px;
   border-radius: 3px;
 }
+
+/* The code is typed, so give it room and lock the rhythm to the digits. */
+.code-input {
+  padding: 10px 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 22px;
+  letter-spacing: 0.28em;
+  text-align: center;
+}
+.code-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.signin-card .link { margin-top: 14px; font-size: 12px; }

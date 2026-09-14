@@ -70,9 +70,26 @@ still cannot write, and a stranger gets an empty result.
 1. Create a project at supabase.com.
 2. Open **SQL Editor → New query**, paste `supabase/schema.sql`, change the email
    at the bottom to the address you sign in with, and run it.
-3. In **Authentication → URL Configuration**, add your site URL to the redirect
-   allow list, so the sign-in link comes back to the right place.
-4. Set two environment variables in Netlify (**Site configuration → Environment
+3. In **Authentication → URL Configuration**:
+   - set **Site URL** to your deployed address (`https://your-site.netlify.app`).
+     It defaults to `http://localhost:3000`, and a sign-in link sent while that
+     default is in place lands on a page nothing serves — the classic
+     "localhost refused to connect" after clicking the email.
+   - add the same address under **Redirect URLs**.
+4. In **Authentication → Emails → Magic Link**, make sure the template offers the
+   code as well as the link. The stock template has only the link:
+
+   ```html
+   <h2>Sign in to PM Payroll</h2>
+   <p>Your code is <b>{{ .Token }}</b> — type it into the page that asked for it.</p>
+   <p>Or <a href="{{ .ConfirmationURL }}">click here to sign in</a>.</p>
+   ```
+
+   The code is the reliable half. A link depends on the Site URL being right, on
+   the same browser holding the verifier, and on no mail scanner having opened it
+   first — Outlook's link protection routinely consumes one-time links before the
+   person clicks. The code depends on none of that.
+5. Set two environment variables in Netlify (**Site configuration → Environment
    variables**), from **Project Settings → API**:
 
    ```
@@ -81,10 +98,17 @@ still cannot write, and a stranger gets an empty result.
    ```
 
    The anon key is designed to be public; it grants nothing on its own.
-5. Redeploy. Sign in as yourself, open **Access**, and add your partner's email
+6. Redeploy. Sign in as yourself, open **Access**, and add your partner's email
    as *View only* or *Can edit*.
-6. Load the books once — *Import sheet or backup* — and they are shared with
+7. Load the books once — *Import sheet or backup* — and they are shared with
    everyone who has access.
+
+### If the email never arrives
+
+Supabase's built-in email service is rate-limited to a handful of messages an
+hour and is meant for testing. For real use, set your own SMTP under **Project
+Settings → Authentication → SMTP Settings** — any provider will do. Until then,
+expect delays and silent drops once you have sent a few.
 
 Both keys absent, the app falls back to browser storage and behaves exactly as it
 did before, which is what keeps the local copy and the preview working.
