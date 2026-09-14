@@ -154,6 +154,10 @@ const samplePeriod = {
   ok('viewer gets no Delete button', (await page.getByRole('button', { name: 'Delete' }).count()) === 0);
   ok('viewer gets no Access tab', (await page.getByRole('button', { name: 'Access' }).count()) === 0);
   ok('viewer sees the view-only badge', await page.locator('.readonly-badge').isVisible());
+  ok('viewer lands on the summary', (await page.locator('.tab.active').innerText()) === 'Summary');
+  ok('the summary charts the history', (await page.locator('.chart .bar').count()) > 0);
+  await page.getByRole('button', { name: 'Revenue' }).click();
+  await page.waitForTimeout(300);
   const rate = page.locator('table tbody tr').first().locator('input').nth(2);
   ok('figure inputs are locked for a viewer', await rate.getAttribute('readonly') !== null);
   const before = await rate.inputValue();
@@ -171,6 +175,8 @@ const samplePeriod = {
   ok('editor is labelled can edit', (await page.locator('.role').innerText()).trim() === 'Can edit');
   ok('editor gets New period', (await page.getByRole('button', { name: 'New period' }).count()) === 1);
   ok('editor gets no Access tab', (await page.getByRole('button', { name: 'Access' }).count()) === 0);
+  await page.getByRole('button', { name: 'Revenue' }).click();
+  await page.waitForTimeout(300);
   const rate = page.locator('table tbody tr').first().locator('input').nth(2);
   ok('figure inputs are editable for an editor', await rate.getAttribute('readonly') === null);
   await ctx.close();

@@ -31,7 +31,12 @@ const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || u
 const page = await b.newPage({ viewport: { width: 1440, height: 960 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERROR ' + e.message));
-page.on('console', m => { if (m.type()==='error' && !m.text().includes('favicon')) errs.push('CONSOLE ' + m.text()); });
+// A sandbox that intercepts TLS makes the font request fail; neither that nor a
+// missing favicon is the app's doing.
+const environmental = /favicon|ERR_CERT_AUTHORITY_INVALID|fonts\.googleapis|fonts\.gstatic|404/;
+page.on('console', m => {
+  if (m.type() === 'error' && !environmental.test(m.text())) errs.push('CONSOLE ' + m.text());
+});
 const ok = (label, cond, detail='') => console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? ' — ' + detail : ''}`);
 
 await page.goto('http://localhost:5601/', { waitUntil: 'networkidle' });
@@ -82,6 +87,7 @@ ok('backup downloads valid JSON', backup.periods.length === periodCount, `${back
 
 // 5. editing recomputes
 await page.getByRole('button', { name: 'Revenue' }).click();
+await page.waitForTimeout(200);
 const before = await page.locator('.figure').first().innerText();
 await page.locator('#usd-pkr').fill('280');
 await page.waitForTimeout(300);

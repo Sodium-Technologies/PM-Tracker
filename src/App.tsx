@@ -12,12 +12,13 @@ import * as cloud from './lib/cloud';
 import AccountsTable from './components/AccountsTable';
 import DivisionMatrix from './components/DivisionMatrix';
 import Ledger from './components/Ledger';
+import Overview from './components/Overview';
 import People from './components/People';
 import SignIn from './components/SignIn';
 import { NumberInput } from './components/Fields';
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
-type Tab = 'revenue' | 'division' | 'payouts' | 'access';
+type Tab = 'overview' | 'revenue' | 'division' | 'payouts' | 'access';
 
 export default function App() {
   const auth = useAuth();
@@ -38,7 +39,9 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const [state, setState] = React.useState<AppState>(() => (cloudEnabled ? emptyState() : loadState() ?? emptyState()));
   const [hadSaved] = React.useState(() => loadState() !== null);
   const [syncing, setSyncing] = React.useState(cloudEnabled);
-  const [tab, setTab] = React.useState<Tab>('revenue');
+  // Opens on the summary: most visits are to find out where things stand, not
+  // to type into the ledger.
+  const [tab, setTab] = React.useState<Tab>('overview');
   const [toast, setToast] = React.useState('');
   const fileRef = React.useRef<HTMLInputElement>(null);
 
@@ -197,7 +200,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
       <aside className="rail">
         <div className="wordmark">
           <b>PM Payroll</b>
-          <span>revenue · division · payouts</span>
+          <span>payroll ledger</span>
         </div>
 
         <div className="rail-label">Periods</div>
@@ -290,6 +293,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
         <nav className="tabs">
           {([
+            ['overview', 'Summary'],
             ['revenue', 'Revenue'],
             ['division', 'Division'],
             ['payouts', 'Payouts & settlement'],
@@ -302,6 +306,14 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         </nav>
 
         <div className="sheet">
+          {tab === 'overview' && (
+            <Overview
+              periods={state.periods}
+              period={period}
+              result={result}
+              onPick={(id) => setState((s) => ({ ...s, activePeriodId: id }))}
+            />
+          )}
           {tab === 'revenue' && <AccountsTable result={result} update={update} />}
           {tab === 'division' && <DivisionMatrix period={period} result={result} update={update} />}
           {tab === 'payouts' && <Ledger period={period} result={result} update={update} />}

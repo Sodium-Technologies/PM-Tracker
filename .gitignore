@@ -13,3 +13,6 @@ assistant-context/
 public/seed.json
 seed.json
 e2e-out/
+# The books themselves — real client figures. Generated, never committed:
+#   node scripts/seed-sql.mjs <seed.json> supabase/seed-periods.sql
+supabase/seed-periods.sql

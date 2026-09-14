@@ -686,3 +686,70 @@ td.owner .cell-input { min-width: 92px; }
 }
 .code-fallback summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .code-fallback .signin-form { margin-top: 8px; }
+
+/* ---------- summary ---------- */
+
+.overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.overview .span-2 { grid-column: 1 / -1; }
+
+.delta { font-size: 12px; font-family: 'IBM Plex Mono', monospace; }
+.delta.up { color: var(--good); }
+.delta.down { color: var(--warn); }
+
+.chart-wrap { padding: 4px 14px 14px; }
+.chart { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; }
+.chart .axis { fill: var(--ink-faint); font-size: 10px; font-family: 'IBM Plex Mono', monospace; }
+.chart .bar { fill: color-mix(in srgb, var(--accent) 28%, transparent); transition: fill .12s; }
+.chart .bar.active { fill: var(--accent); }
+.chart .bar.hover { fill: color-mix(in srgb, var(--accent) 65%, transparent); }
+.chart .bar-hit { fill: transparent; }
+.chart .bar-group { cursor: pointer; }
+.chart-read {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  margin: 6px 0 0;
+  padding-left: 54px;
+  font-size: 13px;
+}
+.chart-read .muted { color: var(--ink-faint); }
+
+.collect-lead { margin: 0; padding: 12px 14px; font-size: 13px; color: var(--ink-soft); }
+.collect-lead b { color: var(--ink); font-family: 'IBM Plex Mono', monospace; }
+
+.chips { list-style: none; margin: 0; padding: 0 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+.chips li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.chips .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); flex: none; }
+.chips .dot.s-pending { background: var(--warn); }
+.chips .dot.s-not-received { background: var(--bad); }
+.chips .dot.s-invoiced { background: var(--accent); }
+.chip-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-fig { color: var(--ink-soft); }
+
+.paybars { list-style: none; margin: 0; padding: 10px 14px 16px; display: flex; flex-direction: column; gap: 9px; }
+.paybars li { display: grid; grid-template-columns: minmax(96px, 150px) 1fr minmax(96px, auto); gap: 12px; align-items: center; font-size: 13px; }
+.pay-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-inline {
+  margin-left: 6px;
+  font-size: 10px;
+  color: var(--ink-faint);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+.pay-track { height: 8px; background: var(--surface-sunk); border-radius: 999px; overflow: hidden; }
+.pay-fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.pay-fig { text-align: right; color: var(--ink-soft); }
+
+@media (max-width: 900px) {
+  .overview { grid-template-columns: 1fr; }
+  .chart-read { padding-left: 0; flex-wrap: wrap; gap: 8px; }
+  .paybars li { grid-template-columns: 1fr minmax(88px, auto); }
+  .paybars .pay-track { grid-column: 1 / -1; }
+}
