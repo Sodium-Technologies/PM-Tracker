@@ -76,8 +76,11 @@ still cannot write, and a stranger gets an empty result.
      default is in place lands on a page nothing serves — the classic
      "localhost refused to connect" after clicking the email.
    - add the same address under **Redirect URLs**.
-4. In **Authentication → Emails → Magic Link**, make sure the template offers the
-   code as well as the link. The stock template has only the link:
+4. Optional, and only on a plan that allows editing email templates: in
+   **Authentication → Emails → Magic Link**, offer the code as well as the link.
+   The stock template has only the link, and the link is enough once step 3 is
+   right — the code is a fallback for when a mail scanner opens links, or the
+   reader is on a different device:
 
    ```html
    <h2>Sign in to PM Payroll</h2>

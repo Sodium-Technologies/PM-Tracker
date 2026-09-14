@@ -676,3 +676,13 @@ td.owner .cell-input { min-width: 92px; }
 }
 .code-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .signin-card .link { margin-top: 14px; font-size: 12px; }
+
+.code-fallback { margin: 14px 0 0; }
+.code-fallback summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--accent);
+  padding: 4px 0;
+}
+.code-fallback summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.code-fallback .signin-form { margin-top: 8px; }

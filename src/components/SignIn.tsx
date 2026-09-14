@@ -78,31 +78,36 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
       <Frame>
         <h1>Check your email</h1>
         <p>
-          Sent to <b>{address}</b>. Enter the six-digit code from that email — it signs
-          you in right here, on this device.
+          Sent to <b>{address}</b>. Click the link in that email to sign in. It works
+          once, and expires shortly.
         </p>
-        <form onSubmit={submitCode} className="signin-form">
-          <label htmlFor="signin-code">Six-digit code</label>
-          <input
-            id="signin-code"
-            className="code-input"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={8}
-            required
-            value={code}
-            placeholder="123456"
-            onChange={(e) => setCode(e.target.value)}
-          />
-          <button className="btn primary" type="submit" disabled={busy}>
-            {busy ? 'Checking…' : 'Sign in'}
-          </button>
-        </form>
+        <details className="code-fallback">
+          <summary>The email shows a six-digit code instead</summary>
+          <p className="signin-note">
+            Some projects send a code as well as a link. If yours does, type it here —
+            it signs you in on this device, whatever the link does.
+          </p>
+          <form onSubmit={submitCode} className="signin-form">
+            <label htmlFor="signin-code">Six-digit code</label>
+            <input
+              id="signin-code"
+              className="code-input"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={8}
+              value={code}
+              placeholder="123456"
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <button className="btn primary" type="submit" disabled={busy || !code.trim()}>
+              {busy ? 'Checking…' : 'Sign in with code'}
+            </button>
+          </form>
+        </details>
         {error && <p className="signin-error">{error}</p>}
         <p className="signin-note">
-          The same email also has a link. The code is the reliable one — a link can be
-          opened by a mail scanner before you get to it, or land in a different browser
-          from the one that asked for it.
+          Nothing arriving? A project's built-in mail service is rate limited to a few
+          messages an hour. Wait a few minutes, or set up your own SMTP.
         </p>
         <button className="link" onClick={() => { setSent(false); setCode(''); setError(''); }}>
           Use a different address
@@ -127,7 +132,7 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
           onChange={(e) => setAddress(e.target.value)}
         />
         <button className="btn primary" type="submit" disabled={busy}>
-          {busy ? 'Sending…' : 'Email me a sign-in code'}
+          {busy ? 'Sending…' : 'Email me a sign-in link'}
         </button>
       </form>
       {error && <p className="signin-error">{error}</p>}

@@ -110,19 +110,22 @@ const samplePeriod = {
   ok('signed out shows no figures', (await page.locator('.figure').count()) === 0);
   ok('sign-in asks for an email', await page.locator('#signin-email').isVisible());
   await page.locator('#signin-email').fill('partner@company.com');
-  await page.getByRole('button', { name: /sign-in code/i }).click();
+  await page.getByRole('button', { name: /sign-in link/i }).click();
   await page.waitForTimeout(400);
-  ok('requesting a code confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
-  ok('a code entry box is offered', await page.locator('#signin-code').isVisible());
+  ok('requesting a link confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
+  ok('the link is the main instruction', /Click the link/.test(await page.locator('.signin-card').innerText()));
+  ok('code entry is offered but not demanded', !(await page.locator('#signin-code').isVisible()));
 
+  await page.locator('.code-fallback summary').click();
+  ok('the code option opens on request', await page.locator('#signin-code').isVisible());
   await page.locator('#signin-code').fill('000000');
-  await page.getByRole('button', { name: /^Sign in$/ }).click();
+  await page.getByRole('button', { name: /Sign in with code/ }).click();
   await page.waitForTimeout(500);
   ok('a wrong code is rejected with a reason',
      /wrong or has expired/.test(await page.locator('.signin-card').innerText()));
 
   await page.locator('#signin-code').fill('123456');
-  await page.getByRole('button', { name: /^Sign in$/ }).click();
+  await page.getByRole('button', { name: /Sign in with code/ }).click();
   await page.waitForTimeout(900);
   ok('the right code signs in without touching a redirect URL',
      (await page.locator('.signin-card').count()) === 0 || !(await page.locator('#signin-code').isVisible()),
