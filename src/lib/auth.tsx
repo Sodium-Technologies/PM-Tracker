@@ -14,6 +14,8 @@ export interface Account {
 export interface Auth {
   /** null while the session is still being restored */
   loading: boolean;
+  /** set when the sign-in service cannot be reached or answers with an error */
+  error: string | null;
   session: Session | null;
   email: string | null;
   /** null when signed in but not on the access list */
@@ -26,6 +28,7 @@ export interface Auth {
 
 export function useAuth(): Auth {
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
   const [session, setSession] = React.useState<Session | null>(null);
   const [role, setRole] = React.useState<Role | null>(null);
 
@@ -33,24 +36,45 @@ export function useAuth(): Auth {
     if (!supabase || !email) { setRole(null); return; }
     // Row-level security limits this to the caller's own row unless they
     // administer the account, so it is safe to ask for it directly.
-    const { data } = await supabase
-      .from('app_users')
-      .select('role')
-      .ilike('email', email)
-      .maybeSingle();
-    setRole((data?.role as Role) ?? null);
+    //
+    // An empty result and a failed request mean completely different things:
+    // the first is "not on the access list", the second is "the database did
+    // not answer". Telling an administrator the first when it is the second
+    // sends them looking for the wrong problem.
+    try {
+      const { data, error: err } = await supabase
+        .from('app_users')
+        .select('role')
+        .ilike('email', email)
+        .maybeSingle();
+      if (err) { setError(err.message); return; }
+      setError(null);
+      setRole((data?.role as Role) ?? null);
+    } catch (e) {
+      setError((e as Error).message || 'The database did not answer.');
+    }
   }, []);
 
   React.useEffect(() => {
     if (!supabase) { setLoading(false); return; }
     let live = true;
 
-    supabase.auth.getSession().then(async ({ data }) => {
+    // Never sit on a spinner: if the project cannot be reached, say so.
+    const timeout = window.setTimeout(() => {
       if (!live) return;
-      setSession(data.session);
-      await readRole(data.session?.user.email);
+      setError('The sign-in service did not respond. Check VITE_SUPABASE_URL and that the project is running.');
       setLoading(false);
-    });
+    }, 12000);
+
+    supabase.auth.getSession()
+      .then(async ({ data, error: err }) => {
+        if (!live) return;
+        if (err) setError(err.message);
+        setSession(data.session);
+        await readRole(data.session?.user.email);
+      })
+      .catch((e: Error) => { if (live) setError(e.message); })
+      .finally(() => { if (live) { window.clearTimeout(timeout); setLoading(false); } });
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
       if (!live) return;
@@ -59,11 +83,12 @@ export function useAuth(): Auth {
       setLoading(false);
     });
 
-    return () => { live = false; sub.subscription.unsubscribe(); };
+    return () => { live = false; window.clearTimeout(timeout); sub.subscription.unsubscribe(); };
   }, [readRole]);
 
   return {
     loading,
+    error,
     session,
     email: session?.user.email ?? null,
     role,

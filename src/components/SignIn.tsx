@@ -4,9 +4,10 @@ import { sendSignInLink } from '../lib/auth';
 /** Sign-in, and the two states that follow it: link sent, and signed in without
  *  access. Nothing here decides anything — the database does — so this screen
  *  only has to be clear about what happened. */
-export default function SignIn({ email, noAccess, onSignOut }: {
+export default function SignIn({ email, noAccess, configError, onSignOut }: {
   email?: string | null;
   noAccess?: boolean;
+  configError?: string;
   onSignOut?: () => void;
 }) {
   const [address, setAddress] = React.useState('');
@@ -24,6 +25,24 @@ export default function SignIn({ email, noAccess, onSignOut }: {
     if (err) setError(err);
     else setSent(true);
   };
+
+  if (configError) {
+    return (
+      <Frame>
+        <h1>Cannot reach sign-in</h1>
+        <p>
+          This site is configured to sign people in, but the service did not answer.
+          Nobody can get in — including administrators — until it does.
+        </p>
+        <p className="signin-error">{configError}</p>
+        <p className="signin-note">
+          Usually one of three things: the project URL is wrong, the project is paused,
+          or this site's address is missing from the redirect list in the project's
+          authentication settings.
+        </p>
+      </Frame>
+    );
+  }
 
   if (noAccess) {
     return (

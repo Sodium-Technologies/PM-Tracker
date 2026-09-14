@@ -642,3 +642,22 @@ td.owner .cell-input { min-width: 92px; }
 /* A locked control still has to be readable — this is a record, not a form. */
 .cell-input[readonly] { cursor: default; }
 .cell-input[readonly]:hover { border-color: transparent; }
+
+/* A deployment that never got its configuration looks identical to a working
+   one until you notice nobody was asked to sign in. Say it on the page. */
+.mode-banner {
+  padding: 10px 24px;
+  background: var(--warn-wash);
+  border-bottom: 1px solid var(--rule);
+  color: var(--warn);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.mode-banner b { font-weight: 600; }
+.mode-banner code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  padding: 1px 4px;
+  border-radius: 3px;
+}

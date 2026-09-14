@@ -24,6 +24,7 @@ export default function App() {
 
   if (cloudEnabled) {
     if (auth.loading) return <div className="booting">Loading…</div>;
+    if (auth.error) return <SignIn configError={auth.error} />;
     if (!auth.session) return <SignIn />;
     if (!auth.role) return <SignIn email={auth.email} noAccess onSignOut={auth.signOut} />;
   }
@@ -260,6 +261,15 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
             <span className="readonly-badge">View only</span>
           )}
         </header>
+
+        {!cloudEnabled && (
+          <div className="mode-banner">
+            <b>Local mode — no sign-in, nothing shared.</b> Everything here lives in this
+            browser only, and anyone who opens this page sees it. To share it with
+            other people, set <code>VITE_SUPABASE_URL</code> and{' '}
+            <code>VITE_SUPABASE_ANON_KEY</code> and rebuild.
+          </div>
+        )}
 
         <dl className="figures">
           <Figure label="Earned" value={fmtUsd(result.totals.earnedUsd)} sub={fmtPkr(result.totals.earnedPkr)} />

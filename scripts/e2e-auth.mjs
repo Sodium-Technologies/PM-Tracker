@@ -41,10 +41,13 @@ const session = (email) => ({
   user: { id: 'stub-user', email, aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {} },
 });
 
-/** Open the app with Supabase stubbed: `role` null means "not on the list". */
-async function open({ email, role, periods = [] }) {
+/** Open the app with Supabase stubbed: `role` null means "not on the list".
+ *  `down: true` makes every call to the project fail, as an unreachable or
+ *  paused project does. */
+async function open({ email, role, periods = [], down = false }) {
   const ctx = await browser.newContext();
   await ctx.route('**/stub.supabase.co/**', async (route) => {
+    if (down) return route.abort('connectionrefused');
     const url = route.request().url();
     const json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     if (url.includes('/auth/v1/otp')) return json({});
@@ -157,6 +160,15 @@ const samplePeriod = {
   ok('administrator cannot change their own row',
     await page.locator('table tbody tr').first().locator('select').isDisabled());
   ok('no page errors for an administrator', errors.length === 0, errors.join('; '));
+  await ctx.close();
+}
+
+// 6. configured, but the project cannot be reached
+{
+  const { page, ctx } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', down: true });
+  const text = await page.locator('.signin-card').innerText();
+  ok('an unreachable project says so instead of hanging', text.includes('Cannot reach sign-in'), text.split('\n')[0]);
+  ok('an unreachable project shows no figures', (await page.locator('.figure').count()) === 0);
   await ctx.close();
 }
 
