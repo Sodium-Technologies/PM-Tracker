@@ -37,7 +37,12 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
   // owns their own copy — so everything is editable.
   const canEdit = cloudEnabled ? auth.canEdit : true;
   const [state, setState] = React.useState<AppState>(() => (cloudEnabled ? emptyState() : loadState() ?? emptyState()));
-  const [hadSaved] = React.useState(() => loadState() !== null);
+  // A saved state with nothing in it is not data — someone who opened the page
+  // once before should still get the seed.
+  const [hadSaved] = React.useState(() => {
+    const saved = loadState();
+    return !!saved?.periods?.some((p) => p.accounts.length || p.staff.length);
+  });
   const [syncing, setSyncing] = React.useState(cloudEnabled);
   // Opens on the summary: most visits are to find out where things stand, not
   // to type into the ledger.
