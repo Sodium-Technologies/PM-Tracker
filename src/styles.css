@@ -753,3 +753,5 @@ td.owner .cell-input { min-width: 92px; }
   .paybars li { grid-template-columns: 1fr minmax(88px, auto); }
   .paybars .pay-track { grid-column: 1 / -1; }
 }
+
+.head-actions { display: flex; gap: 6px; flex-wrap: wrap; }

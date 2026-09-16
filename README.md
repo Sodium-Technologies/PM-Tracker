@@ -19,9 +19,26 @@ per period.
    account's freelancer pool. Columns that don't add to 100% are flagged, with
    the unassigned amount shown in PKR.
 3. **Payouts & settlement** — per-person payout register (PKR and USD with the
-   per-account breakdown, plus manual corrections and a "kept local" flag),
+   per-account breakdown and manual corrections), **wages paid here**,
    reimbursements, payables outside the matrix, amounts held back, transfers
    already made, and what still has to be remitted.
+
+### Wages paid here
+
+Some pay never travels: the administrator hands it over locally. Mark a person
+**Paid here** in the payout register and their pay is recorded as a wage, listed
+by name, and taken off what must be remitted — the amount owed to them does not
+change, only the route. *Apply to all periods* sets the same mark on everyone of
+that name in every period, because it is a standing arrangement rather than a
+monthly decision, and it carries forward into each new period.
+
+The same panel takes free lines for anything drawn on top — a salary, an extra
+share, a top-up. Each is labelled, recorded, and deducted the same way, so the
+ledger always balances:
+
+```
+owed = still to remit + wages paid here + reimbursements + held back + transfers made
+```
 
 ## Working with periods
 

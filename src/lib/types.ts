@@ -40,6 +40,9 @@ export interface StaffMember {
   adjustmentPkr: number;
   /** Pay that stays where it is instead of being remitted — it is still owed to
    *  the person, but it is not part of the money that has to be sent. */
+  /** This person's pay is settled where the books are kept, not remitted — the
+   *  administrator hands it over locally. It is still pay, and still recorded;
+   *  it simply never travels. */
   retained: boolean;
   notes: string;
 }
@@ -79,6 +82,9 @@ export interface Period {
   otherPayables: LineItem[];
   /** Amounts kept back this period rather than remitted. */
   withheld: LineItem[];
+  /** Wages drawn where the books are kept — a salary, a share taken in person,
+   *  a top-up. Recorded as paid, and deducted from what must be remitted. */
+  localWages: LineItem[];
   transfers: Transfer[];
 }
 

@@ -60,6 +60,9 @@ export default function Overview({ periods, period, result, onPick }: {
           <div className="row"><dt>Team pool</dt><dd>{fmtPkr(result.totals.freelancerPkr)}</dd></div>
           <div className="row"><dt>Company share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
           <div className="row rule"><dt>Owed this period</dt><dd>{fmtPkr(result.ledger.transferablePkr)}</dd></div>
+          {result.ledger.localWagesPkr > 0 && (
+            <div className="row"><dt>Wages paid here</dt><dd>−{fmtPkr(result.ledger.localWagesPkr)}</dd></div>
+          )}
           <div className={`row final${result.ledger.remainingPkr < 0 ? ' negative' : ''}`}>
             <dt>Still to remit</dt><dd>{fmtPkr(result.ledger.remainingPkr)}</dd>
           </div>

@@ -79,7 +79,10 @@ export interface PeriodResult {
     /** everything owed this period: staff pay + outside payables + company share */
     transferablePkr: number;
     reimbursementsPkr: number;
+    /** pay of people whose wages are settled locally */
     retainedPkr: number;
+    /** retained pay plus the drawn wage lines: everything paid out on the spot */
+    localWagesPkr: number;
     withheldPkr: number;
     transfersPkr: number;
     /** what still has to be remitted */
@@ -125,13 +128,16 @@ export function computePeriod(period: Period): PeriodResult {
   const transfersPkr = round2(sum(period.transfers.map((x) => x.amountPkr)));
   const reimbursementsPkr = round2(sum(period.reimbursements.map((r) => r.amountUsd)) * rate);
   const retainedPkr = round2(sum(staff.filter((s) => s.staff.retained).map((s) => s.payPkr)));
+  // Wages handed over where the books are kept: the pay of people marked as
+  // settled locally, plus any amount drawn on top (a salary, an extra share).
+  const localWagesPkr = round2(retainedPkr + sum(period.localWages.map((x) => x.amountPkr)));
 
   // Everything owed for the period …
   const transferablePkr = round2(t.staffPayPkr + otherPayablesPkr + t.companyPkr);
   // … less what never has to travel: expenses already covered on the receiving
   // side, pay that stays put, amounts held back, and money already sent.
   const remainingPkr = round2(
-    transferablePkr - reimbursementsPkr - retainedPkr - withheldPkr - transfersPkr,
+    transferablePkr - reimbursementsPkr - localWagesPkr - withheldPkr - transfersPkr,
   );
 
   const warnings: string[] = [];
@@ -157,6 +163,7 @@ export function computePeriod(period: Period): PeriodResult {
       transferablePkr,
       reimbursementsPkr,
       retainedPkr,
+      localWagesPkr,
       withheldPkr,
       transfersPkr,
       remainingPkr,

@@ -28,7 +28,8 @@ export function newStaff(partial: Partial<StaffMember> = {}): StaffMember {
 export function newPeriod(label: string, usdToPkr = 280): Period {
   return {
     id: uid(), label, usdToPkr,
-    accounts: [], staff: [], reimbursements: [], otherPayables: [], withheld: [], transfers: [],
+    accounts: [], staff: [], reimbursements: [], otherPayables: [], withheld: [],
+    localWages: [], transfers: [],
   };
 }
 
@@ -66,6 +67,9 @@ export function rollForward(period: Period, label?: string): Period {
     reimbursements: period.reimbursements.map((r) => ({ ...r, id: uid() })),
     otherPayables: period.otherPayables.map((x) => ({ ...x, id: uid(), amountPkr: 0 })),
     withheld: [],
+    // A local wage is usually a standing arrangement — a salary, a fixed share —
+    // so the amount carries forward with the label rather than resetting.
+    localWages: period.localWages.map((x) => ({ ...x, id: uid() })),
     transfers: [],
   };
 }
@@ -88,6 +92,7 @@ export function normalize(state: AppState): AppState {
     p.reimbursements ??= [];
     p.otherPayables ??= [];
     p.withheld ??= [];
+    p.localWages ??= [];
     p.transfers ??= [];
     for (const a of p.accounts) {
       a.currency ??= 'USD';

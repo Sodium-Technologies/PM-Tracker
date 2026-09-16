@@ -179,6 +179,38 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
     }
   };
 
+  /** Marking somebody's wages as settled locally is a standing arrangement, not a
+   *  monthly decision — this applies the current period's marks to every period,
+   *  matching people by name. */
+  const applyPaidHereEverywhere = async () => {
+    const names = new Set(
+      period.staff.filter((m) => m.retained).map((m) => m.name.trim().toLowerCase()),
+    );
+    if (!names.size) { setToast('Nobody is marked as paid here yet'); return; }
+
+    const changed: Period[] = [];
+    setState((s) => ({
+      ...s,
+      periods: s.periods.map((p) => {
+        if (!p.staff.some((m) => names.has(m.name.trim().toLowerCase()) && !m.retained)) return p;
+        const draft = clone(p);
+        draft.staff.forEach((m) => {
+          if (names.has(m.name.trim().toLowerCase())) m.retained = true;
+        });
+        changed.push(draft);
+        return draft;
+      }),
+    }));
+
+    const who = [...names].join(', ');
+    if (cloudEnabled && changed.length) {
+      const { error } = await cloud.uploadPeriods(changed);
+      setToast(error ? `Applied locally, not shared: ${error}` : `${who} marked as paid here in ${changed.length} more periods`);
+    } else {
+      setToast(changed.length ? `${who} marked as paid here in ${changed.length} more periods` : 'Already applied everywhere');
+    }
+  };
+
   const backup = () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -316,7 +348,10 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           )}
           {tab === 'revenue' && <AccountsTable result={result} update={update} />}
           {tab === 'division' && <DivisionMatrix period={period} result={result} update={update} />}
-          {tab === 'payouts' && <Ledger period={period} result={result} update={update} />}
+          {tab === 'payouts' && (
+            <Ledger period={period} result={result} update={update}
+              onApplyPaidHereEverywhere={applyPaidHereEverywhere} />
+          )}
           {tab === 'access' && auth.isSuperAdmin && (
             <People me={auth.email} onChanged={auth.refreshRole} />
           )}

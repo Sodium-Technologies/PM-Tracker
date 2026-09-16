@@ -119,7 +119,40 @@ ok('delete lands on a neighbour, not the first period',
 await page.reload({ waitUntil: 'networkidle' });
 ok('state survives reload', (await page.locator('.period').count()) === periodCount);
 
-// 9. division allocation display
+// 9. wages settled locally
+{
+  await page.getByRole('button', { name: new RegExp(active) }).first().click();
+  await page.getByRole('button', { name: 'Payouts & settlement' }).click();
+  await page.waitForTimeout(400);
+
+  const remitLine = () => page.locator('.settle .row.final dd').first().innerText();
+  const before = await remitLine();
+
+  const firstRetain = page.locator('input[type=checkbox]').first();
+  await firstRetain.check();
+  await page.waitForTimeout(400);
+  const after = await remitLine();
+  ok('marking someone paid here lowers what must be remitted', before !== after, `${before} → ${after}`);
+  ok('the settlement names the wages paid here',
+     /Wages paid here/.test(await page.locator('.settle').innerText()));
+  ok('the wages panel lists the person', /pay/.test(await page.locator('.panel.wages').innerText()));
+
+  await page.locator('.panel.wages').getByRole('button', { name: 'Add' }).click();
+  await page.waitForTimeout(200);
+  const drawn = page.locator('.panel.wages').locator('input[type=number]').first();
+  await drawn.fill('50000');
+  await page.waitForTimeout(500);
+  const afterDraw = await remitLine();
+  ok('a drawn wage lowers it further', afterDraw !== after, `${after} → ${afterDraw}`);
+  ok('apply-to-all is offered once somebody is marked',
+     (await page.getByRole('button', { name: 'Apply to all periods' }).count()) === 1);
+  await page.getByRole('button', { name: 'Apply to all periods' }).click();
+  await page.waitForTimeout(600);
+  ok('applying across periods reports what it did',
+     /paid here in \d+ more periods|Already applied/.test(await page.locator('.toast').innerText().catch(() => '')));
+}
+
+// 10. division allocation display
 await page.getByRole('button', { name: new RegExp(active) }).first().click();
 await page.getByRole('button', { name: 'Division' }).click();
 await page.waitForTimeout(300);

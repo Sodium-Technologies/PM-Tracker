@@ -7,8 +7,9 @@ import { useCanEdit } from '../lib/access';
 
 type Update = (fn: (p: Period) => void) => void;
 
-export default function Ledger({ period, result, update }: {
+export default function Ledger({ period, result, update, onApplyPaidHereEverywhere }: {
   period: Period; result: PeriodResult; update: Update;
+  onApplyPaidHereEverywhere: () => void;
 }) {
   const canEdit = useCanEdit();
   const L = result.ledger;
@@ -19,7 +20,13 @@ export default function Ledger({ period, result, update }: {
       <section className="panel">
         <div className="panel-head">
           <h2>Payout register <span className="hint">what each person is owed this period</span></h2>
-          <button className="btn" onClick={() => exportPayoutSheet(period)}>Export payouts</button>
+          <div className="head-actions">
+            {canEdit && result.staff.some((s) => s.staff.retained) && (
+              <button className="btn" title="Apply the paid-here marks to every period"
+                onClick={onApplyPaidHereEverywhere}>Apply to all periods</button>
+            )}
+            <button className="btn" onClick={() => exportPayoutSheet(period)}>Export payouts</button>
+          </div>
         </div>
         <div className="scroll">
           <table>
@@ -30,7 +37,7 @@ export default function Ledger({ period, result, update }: {
                 <th className="fig">Adjustment</th>
                 <th className="fig">Pay PKR</th>
                 <th className="fig">USD</th>
-                <th title="Pay that stays where it is — still owed, but not part of the money to remit">Kept local</th>
+                <th title="Their pay is handed over here instead of being remitted — recorded as a wage either way">Paid here</th>
               </tr>
             </thead>
             <tbody>
@@ -82,6 +89,59 @@ export default function Ledger({ period, result, update }: {
       </section>
 
       <div className="stack">
+        <section className="panel wages">
+          <div className="panel-head">
+            <h2>Wages paid here <span className="hint">settled locally, not remitted</span></h2>
+            <EditOnly>
+              <button className="btn" onClick={() => update((d) => d.localWages.push({
+                id: uid(), label: 'Draw', amountPkr: 0,
+              }))}>Add</button>
+            </EditOnly>
+          </div>
+          <table>
+            <tbody>
+              {result.staff.filter((s) => s.staff.retained).map((s) => (
+                <tr key={s.staff.id}>
+                  <td>{s.staff.name} <span className="tag-inline">pay</span></td>
+                  <td className="fig mono">{fmtPkr(s.payPkr)}</td>
+                  <td className="muted small">from the division</td>
+                  <td />
+                </tr>
+              ))}
+              {period.localWages.map((w) => (
+                <tr key={w.id}>
+                  <td><TextInput value={w.label}
+                    onChange={(v) => update((d) => { const x = d.localWages.find((y) => y.id === w.id); if (x) x.label = v; })} /></td>
+                  <td className="fig">
+                    <NumberInput value={w.amountPkr} width={96} unit="PKR"
+                      onChange={(v) => update((d) => { const x = d.localWages.find((y) => y.id === w.id); if (x) x.amountPkr = v; })} />
+                  </td>
+                  <td className="muted small">drawn</td>
+                  <td>
+                    <EditOnly>
+                      <button className="btn icon" aria-label={`Remove ${w.label}`} onClick={() => update((d) => {
+                        d.localWages = d.localWages.filter((y) => y.id !== w.id);
+                      })}>×</button>
+                    </EditOnly>
+                  </td>
+                </tr>
+              ))}
+              {!L.localWagesPkr && !period.localWages.length && (
+                <tr><td colSpan={4} className="empty">Nothing settled locally this period.</td></tr>
+              )}
+            </tbody>
+            {L.localWagesPkr > 0 && (
+              <tfoot>
+                <tr>
+                  <td>Total paid here</td>
+                  <td className="fig mono total">{fmtPkr(L.localWagesPkr)}</td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </section>
+
         <section className="panel">
           <div className="panel-head"><h2>Settlement</h2><span className="hint">PKR</span></div>
           <dl className="settle">
@@ -90,7 +150,7 @@ export default function Ledger({ period, result, update }: {
             <div className="row"><dt>Company share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
             <div className="row rule"><dt>Owed this period</dt><dd>{fmtPkr(L.transferablePkr)}</dd></div>
             <div className="row"><dt>Reimbursements already covered</dt><dd>−{fmtPkr(L.reimbursementsPkr)}</dd></div>
-            <div className="row"><dt>Pay kept local</dt><dd>−{fmtPkr(L.retainedPkr)}</dd></div>
+            <div className="row"><dt>Wages paid here</dt><dd>−{fmtPkr(L.localWagesPkr)}</dd></div>
             <div className="row"><dt>Held back</dt><dd>−{fmtPkr(L.withheldPkr)}</dd></div>
             <div className="row"><dt>Already transferred</dt><dd>−{fmtPkr(L.transfersPkr)}</dd></div>
             <div className={`row final${L.remainingPkr < 0 ? ' negative' : ''}`}>
