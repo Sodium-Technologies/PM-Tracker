@@ -1,5 +1,6 @@
 import React from 'react';
 import { clearUrlError, sendSignInLink, signInErrorFromUrl, signInWithCode } from '../lib/auth';
+import Mark from './Mark';
 
 /** Sign-in, and the states that follow it: code entry, no access, and a
  *  deployment whose sign-in service cannot be reached. Nothing here decides
@@ -118,7 +119,7 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
 
   return (
     <Frame>
-      <h1>PM Payroll</h1>
+      <h1 className="signin-brand"><Mark className="mark lg" />CKO PM Payroll</h1>
       <p>Sign in with the email address you were given access on.</p>
       <form onSubmit={request} className="signin-form">
         <label htmlFor="signin-email">Email address</label>

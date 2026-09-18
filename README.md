@@ -1,4 +1,4 @@
-# PM Payroll
+# CKO PM Payroll
 
 A dynamic payroll app for the property-management freelance book — replaces the
 `PM_Mastersheet.xlsx` monthly tabs with a live calculator.
@@ -63,6 +63,18 @@ npm run dev      # http://localhost:5173
 npm run build    # static bundle in dist/
 ```
 
+## The mark
+
+`public/icon.svg` is the drawing everything else comes from: the browser tab
+icon, `favicon.ico`, the home-screen icon, and — redrawn inline in
+`src/components/Mark.tsx`, so it picks up the page's own font — the mark in the
+rail and on the sign-in screen. Change the SVG, then run
+`node scripts/icons.mjs` to render the PNG and `.ico` files again.
+
+The mark's teal is `--brand` in `src/styles.css`, and every neutral in the
+palette is mixed towards it. It does not change between light and dark — the
+logo is one object — while `--accent` is its readable form on each paper.
+
 ## Sharing it with other people
 
 Without any configuration the app is a local tool: whatever is in your browser is
@@ -101,7 +113,7 @@ still cannot write, and a stranger gets an empty result.
    reader is on a different device:
 
    ```html
-   <h2>Sign in to PM Payroll</h2>
+   <h2>Sign in to CKO PM Payroll</h2>
    <p>Your code is <b>{{ .Token }}</b> — type it into the page that asked for it.</p>
    <p>Or <a href="{{ .ConfirmationURL }}">click here to sign in</a>.</p>
    ```

@@ -13,6 +13,7 @@ import AccountsTable from './components/AccountsTable';
 import Analytics from './components/Analytics';
 import DivisionMatrix from './components/DivisionMatrix';
 import Ledger from './components/Ledger';
+import Mark from './components/Mark';
 import Overview from './components/Overview';
 import People from './components/People';
 import SignIn from './components/SignIn';
@@ -229,14 +230,14 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'pm-payroll-backup.json';
+    a.download = 'cko-pm-payroll-backup.json';
     a.click();
     URL.revokeObjectURL(a.href);
     setToast('Backup downloaded');
   };
 
   const exportExcel = () => {
-    exportWorkbook(state.periods, 'PM Payroll.xlsx');
+    exportWorkbook(state.periods, 'CKO PM Payroll.xlsx');
     setToast(`Downloaded ${state.periods.length} months as Excel`);
   };
 
@@ -245,8 +246,11 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
     <div className="app">
       <aside className="rail">
         <div className="wordmark">
-          <b>PM Payroll</b>
-          <span>payroll ledger</span>
+          <Mark />
+          <div>
+            <b>CKO PM Payroll</b>
+            <span>payroll ledger</span>
+          </div>
         </div>
 
         <nav className="rail-nav">

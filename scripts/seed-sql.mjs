@@ -30,7 +30,7 @@ function dollarQuote(text) {
 const sqlString = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
 const lines = [
-  '-- PM Payroll — the books, ready to paste into Supabase (SQL Editor → New query).',
+  '-- CKO PM Payroll — the books, ready to paste into Supabase (SQL Editor → New query).',
   '--',
   `-- ${periods.length} periods: ${periods[0].label} … ${periods[periods.length - 1].label}`,
   '-- Generated from the mastersheet; safe to run more than once.',

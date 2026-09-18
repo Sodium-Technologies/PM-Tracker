@@ -58,7 +58,7 @@ console.log('      figures:', figures.join(' | '));
 const [dl1] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download as Excel' }).click()]);
 const xlPath = join(OUT, 'export.xlsx'); await dl1.saveAs(xlPath);
 const wb = XLSX.read(readFileSync(xlPath));
-ok('Excel export downloads', dl1.suggestedFilename() === 'PM Payroll.xlsx', dl1.suggestedFilename());
+ok('Excel export downloads', dl1.suggestedFilename() === 'CKO PM Payroll.xlsx', dl1.suggestedFilename());
 ok('Excel has a sheet per period + summary', wb.SheetNames.length === periodCount + 1, `${wb.SheetNames.length} sheets`);
 const sep = XLSX.utils.sheet_to_json(wb.Sheets[active], { header: 1 });
 const totalRow = sep.find(r => r[0] === 'TOTAL');
