@@ -766,3 +766,31 @@ td.owner .cell-input { min-width: 92px; }
 }
 td.mid { text-align: center; }
 .rate-field select.cell-input { min-width: 0; width: auto; font-size: 12px; }
+
+/* ---------- analytics ---------- */
+/* One pair carries every up/down reading on this page: a green-teal and a warm
+   orange, checked for contrast against both papers and distinguishable to
+   red-green colour vision. */
+:root { --chart-up: #0b9384; --chart-down: #bf6207; }
+
+.figures.inset {
+  grid-column: 1 / -1;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.figures.inset .figure dd.tone-up { color: var(--chart-up); }
+.figures.inset .figure dd.tone-down { color: var(--chart-down); }
+
+.chart .grid.strong { stroke: var(--rule-strong); }
+.chart .avg-line { fill: none; stroke: var(--ink); stroke-width: 1.75; stroke-linejoin: round; opacity: .72; }
+.chart .avg-label { fill: var(--ink-soft); font-size: 10px; }
+.chart .bar-up { fill: var(--chart-up); }
+.chart .bar-down { fill: var(--chart-down); }
+.chart .series-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .series-line.thin { stroke-width: 1.5; }
+.chart .series-dot { fill: var(--accent); }
+
+.spark { width: 132px; height: 26px; display: block; }
+.spark .series-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; }
+.spark .series-dot { fill: var(--accent); }

@@ -10,6 +10,7 @@ import { useAuth } from './lib/auth';
 import { AccessContext } from './lib/access';
 import * as cloud from './lib/cloud';
 import AccountsTable from './components/AccountsTable';
+import Analytics from './components/Analytics';
 import DivisionMatrix from './components/DivisionMatrix';
 import Ledger from './components/Ledger';
 import Overview from './components/Overview';
@@ -18,7 +19,7 @@ import SignIn from './components/SignIn';
 import { NumberInput } from './components/Fields';
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
-type Tab = 'overview' | 'revenue' | 'division' | 'payouts' | 'access';
+type Tab = 'overview' | 'analytics' | 'revenue' | 'division' | 'payouts' | 'access';
 
 export default function App() {
   const auth = useAuth();
@@ -351,6 +352,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <nav className="tabs">
           {([
             ['overview', 'Summary'],
+            ['analytics', 'Analytics'],
             ['revenue', 'Revenue'],
             ['division', 'Payrolls'],
             ['payouts', 'Distributions'],
@@ -368,6 +370,12 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
               period={period}
               result={result}
               onPick={(id) => setState((s) => ({ ...s, activePeriodId: id }))}
+            />
+          )}
+          {tab === 'analytics' && (
+            <Analytics
+              periods={state.periods}
+              onPick={(id) => { setState((s) => ({ ...s, activePeriodId: id })); setTab('overview'); }}
             />
           )}
           {tab === 'revenue' && (
