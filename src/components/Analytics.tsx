@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Period } from '../lib/types';
-import { computePeriod, fmtPkr, fmtUsd, round2 } from '../lib/calc';
+import { computePeriod, fmtUsd, round2 } from '../lib/calc';
 import { hoursAsText } from '../lib/time';
 
 interface MonthStat {
@@ -8,13 +8,9 @@ interface MonthStat {
   label: string;
   short: string;
   earnedUsd: number;
-  teamPkr: number;
-  companyPkr: number;
   hours: number;
   /** client name -> earned USD that month */
   byClient: Map<string, number>;
-  /** person name -> pay PKR that month */
-  byPerson: Map<string, number>;
 }
 
 /** What the months add up to: how the business is doing, where the money comes
@@ -33,11 +29,8 @@ export default function Analytics({ periods, onPick }: {
         label: p.label,
         short: `${m[1].slice(0, 3)} ${m[2].slice(2)}`,
         earnedUsd: r.totals.earnedUsd,
-        teamPkr: r.totals.freelancerPkr,
-        companyPkr: r.totals.companyPkr,
         hours: r.accounts.reduce((t, a) => t + a.units, 0),
         byClient: new Map(r.accounts.map((a) => [a.account.name.trim(), a.earnedUsd])),
-        byPerson: new Map(r.staff.map((s) => [s.staff.name.trim(), s.payPkr])),
       };
     }), [periods]);
 
@@ -76,14 +69,6 @@ export default function Analytics({ periods, onPick }: {
     total: months.reduce((t, m) => t + (m.byClient.get(name) ?? 0), 0),
   })).sort((a, b) => b.now - a.now || b.total - a.total);
 
-  const peopleNames = [...new Set(months.flatMap((m) => [...m.byPerson.keys()]))];
-  const people = peopleNames.map((name) => ({
-    name,
-    series: months.map((m) => m.byPerson.get(name) ?? 0),
-    now: latest.byPerson.get(name) ?? 0,
-    total: months.reduce((t, m) => t + (m.byPerson.get(name) ?? 0), 0),
-  })).sort((a, b) => b.now - a.now || b.total - a.total);
-
   const latestTotal = clients.reduce((t, c) => t + c.now, 0) || 1;
   const topShare = (clients[0]?.now ?? 0) / latestTotal * 100;
 
@@ -112,13 +97,6 @@ export default function Analytics({ periods, onPick }: {
 
       <section className="panel span-2">
         <div className="panel-head">
-          <h2>Up or down on the month before <span className="hint">as a percentage</span></h2>
-        </div>
-        <GrowthChart months={months} />
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
           <h2>Where the money comes from</h2>
           <span className="hint">{latest.label}</span>
         </div>
@@ -139,14 +117,6 @@ export default function Analytics({ periods, onPick }: {
         </ul>
       </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>How much of it the team takes</h2>
-          <span className="hint">team share of everything earned</span>
-        </div>
-        <ShareChart months={months} />
-      </section>
-
       <section className="panel span-2">
         <div className="panel-head">
           <h2>Each client over time</h2>
@@ -160,18 +130,6 @@ export default function Analytics({ periods, onPick }: {
         />
       </section>
 
-      <section className="panel span-2">
-        <div className="panel-head">
-          <h2>Each person over time</h2>
-          <span className="hint">PKR per month · newest on the right</span>
-        </div>
-        <TrendTable
-          rows={people}
-          months={months}
-          format={fmtPkr}
-          emptyText="Nobody has a share yet."
-        />
-      </section>
     </div>
   );
 }
@@ -243,85 +201,6 @@ function RevenueChart({ months, onPick }: { months: MonthStat[]; onPick: (id: st
   );
 }
 
-/** Growth is a polarity: up one way, down the other, from a zero line. */
-function GrowthChart({ months }: { months: MonthStat[] }) {
-  const changes = months.slice(1).map((m, i) => ({
-    month: m,
-    pct: months[i].earnedUsd ? ((m.earnedUsd - months[i].earnedUsd) / months[i].earnedUsd) * 100 : 0,
-  }));
-  const W = 860, H = 190, padL = 56, padR = 16, padT = 18, padB = 30;
-  const plotW = W - padL - padR, plotH = H - padT - padB;
-  const extent = Math.max(20, ...changes.map((c) => Math.abs(c.pct)));
-  const zero = padT + plotH / 2;
-  const band = plotW / changes.length;
-  const barW = Math.max(6, Math.min(44, band - 12));
-  const h = (pct: number) => (Math.abs(pct) / extent) * (plotH / 2);
-
-  return (
-    <div className="chart-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img"
-        aria-label="Percentage change in money earned from one month to the next">
-        <line x1={padL} x2={W - padR} y1={zero} y2={zero} className="grid strong" />
-        <text x={padL - 8} y={zero + 4} className="axis" textAnchor="end">0%</text>
-        {changes.map((c, i) => {
-          const x = padL + i * band + band / 2;
-          const height = Math.max(2, h(c.pct));
-          const up = c.pct >= 0;
-          return (
-            <g key={c.month.period.id}>
-              <rect x={x - barW / 2} y={up ? zero - height : zero} width={barW} height={height}
-                rx={3} className={up ? 'bar-up' : 'bar-down'} />
-              <text x={x} y={up ? zero - height - 6 : zero + height + 14} className="axis"
-                textAnchor="middle">{`${c.pct >= 0 ? '+' : ''}${Math.round(c.pct)}%`}</text>
-              <text x={x} y={H - 8} className="axis" textAnchor="middle">{c.month.short}</text>
-              <title>{`${c.month.label}: ${c.pct >= 0 ? '+' : ''}${round2(c.pct)}% on the month before`}</title>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
-/** One measure again — the team's percentage — so a single line with its average. */
-function ShareChart({ months }: { months: MonthStat[] }) {
-  const pts = months.map((m) => {
-    const total = m.teamPkr + m.companyPkr;
-    return total ? (m.teamPkr / total) * 100 : 0;
-  });
-  const W = 420, H = 170, padL = 40, padR = 14, padT = 16, padB = 26;
-  const plotW = W - padL - padR, plotH = H - padT - padB;
-  const y = (v: number) => padT + plotH - (v / 100) * plotH;
-  const x = (i: number) => padL + (pts.length === 1 ? plotW / 2 : (i / (pts.length - 1)) * plotW);
-  const line = pts.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join(' ');
-  const mean = pts.reduce((t, v) => t + v, 0) / pts.length;
-
-  return (
-    <div className="chart-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img"
-        aria-label="The team's share of everything earned, month by month, as a percentage">
-        {[0, 50, 100].map((t) => (
-          <g key={t}>
-            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} className="grid" />
-            <text x={padL - 8} y={y(t) + 4} className="axis" textAnchor="end">{t}%</text>
-          </g>
-        ))}
-        <path d={line} className="series-line" />
-        {pts.map((v, i) => (
-          <g key={i}>
-            <circle cx={x(i)} cy={y(v)} r={i === pts.length - 1 ? 4.5 : 2.5} className="series-dot" />
-            <title>{`${months[i].label}: ${round2(v)}% to the team`}</title>
-          </g>
-        ))}
-      </svg>
-      <p className="chart-read">
-        <b>{round2(pts[pts.length - 1])}%</b>
-        <span className="muted">to the team this month · {round2(mean)}% on average</span>
-      </p>
-    </div>
-  );
-}
-
 function TrendTable({ rows, months, format, emptyText }: {
   rows: { name: string; series: number[]; now: number; total: number }[];
   months: MonthStat[];
@@ -370,7 +249,7 @@ function Spark({ series, label, months, format }: {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="spark" role="img"
       aria-label={`${label}: ${series.map((v, i) => `${months[i].short} ${format(v)}`).join(', ')}`}>
-      <path d={line} className="series-line thin" />
+      <path d={line} className="series-line" />
       <circle cx={x(last)} cy={y(series[last])} r={2.5} className="series-dot" />
     </svg>
   );
