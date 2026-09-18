@@ -28,11 +28,11 @@ export default function DivisionMatrix({ period, result, update }: {
     <section className="panel">
       <div className="panel-head">
         <h2>
-          Division <span className="hint">each person's share of an account's team pool</span>
+          Who gets what <span className="hint">how each client's team money is split, in %</span>
         </h2>
         <EditOnly>
           <button className="btn" onClick={() => update((d) => d.staff.push(newStaff()))}>
-            Add team member
+            Add a person
           </button>
         </EditOnly>
       </div>
@@ -40,8 +40,8 @@ export default function DivisionMatrix({ period, result, update }: {
         <table>
           <thead>
             <tr>
-              <th>Team member</th>
-              <th className="fig">Pay</th>
+              <th>Person</th>
+              <th className="fig">They get</th>
               {result.accounts.map((a) => (
                 <th key={a.account.id} className="fig">
                   <div>{a.account.name}</div>
@@ -84,12 +84,12 @@ export default function DivisionMatrix({ period, result, update }: {
               </tr>
             ))}
             {!period.staff.length && (
-              <tr><td colSpan={result.accounts.length + 3} className="empty">No team members yet.</td></tr>
+              <tr><td colSpan={result.accounts.length + 3} className="empty">Nobody added yet.</td></tr>
             )}
           </tbody>
           <tfoot>
             <tr>
-              <td>Allocated</td>
+              <td>Shared out</td>
               <td className="fig mono">{fmtPkr(result.totals.staffPayPkr)}</td>
               {result.accounts.map((a) => {
                 const pct = round2(a.allocated * 100);
@@ -107,7 +107,7 @@ export default function DivisionMatrix({ period, result, update }: {
       </div>
       {result.totals.unallocatedPkr !== 0 && (
         <p className="panel-note">
-          {fmtPkr(result.totals.unallocatedPkr)} of the team pool is not assigned to anyone.
+          {fmtPkr(result.totals.unallocatedPkr)} of the team's money has not been given to anyone.
         </p>
       )}
     </section>

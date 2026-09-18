@@ -11,6 +11,7 @@ export function newAccount(partial: Partial<Account> = {}): Account {
     owner: '',
     currency: 'USD',
     rate: 0,
+    paidDirect: false,
     entries: [0],
     feePct: 0,
     adjustmentUsd: 0,
@@ -28,6 +29,8 @@ export function newStaff(partial: Partial<StaffMember> = {}): StaffMember {
 export function newPeriod(label: string, usdToPkr = 280): Period {
   return {
     id: uid(), label, usdToPkr,
+    // A month started here is typed by hand, on a timesheet's terms.
+    timeFormat: 'hm',
     accounts: [], staff: [], reimbursements: [], otherPayables: [], withheld: [],
     localWages: [], transfers: [],
   };
@@ -62,6 +65,9 @@ export function rollForward(period: Period, label?: string): Period {
     id: uid(),
     label: label || nextLabel(period.label),
     usdToPkr: period.usdToPkr,
+    // The hours are cleared, so the new month can read them as a timesheet does
+    // without changing the meaning of anything already entered.
+    timeFormat: 'hm',
     accounts,
     staff,
     reimbursements: period.reimbursements.map((r) => ({ ...r, id: uid() })),
@@ -94,8 +100,10 @@ export function normalize(state: AppState): AppState {
     p.withheld ??= [];
     p.localWages ??= [];
     p.transfers ??= [];
+    p.timeFormat ??= 'decimal';
     for (const a of p.accounts) {
       a.currency ??= 'USD';
+      a.paidDirect ??= false;
       a.entries = Array.isArray(a.entries) && a.entries.length ? a.entries : [0];
       a.feePct ??= 0;
       a.adjustmentUsd ??= 0;

@@ -1,13 +1,15 @@
 import type { Account, Period } from '../lib/types';
 import { STATUS_OPTIONS } from '../lib/types';
-import { fmtNum, fmtPkr, fmtUsd, type PeriodResult } from '../lib/calc';
+import { fmtPkr, fmtUsd, type PeriodResult } from '../lib/calc';
+import { hoursAsText } from '../lib/time';
 import { EditOnly, EntriesInput, NumberInput, TextInput } from './Fields';
 import { newAccount } from '../lib/state';
 import { useCanEdit } from '../lib/access';
 
-export default function AccountsTable({ result, update }: {
+export default function AccountsTable({ result, update, timeFormat }: {
   result: PeriodResult;
   update: (fn: (p: Period) => void) => void;
+  timeFormat: 'hm' | 'decimal';
 }) {
   const canEdit = useCanEdit();
   const patch = (id: string, p: Partial<Account>) =>
@@ -22,11 +24,15 @@ export default function AccountsTable({ result, update }: {
     <section className="panel">
       <div className="panel-head">
         <h2>
-          Revenue by account <span className="hint">rate × time, less the fee deduction</span>
+          Money in <span className="hint">
+            {timeFormat === 'hm'
+              ? 'rate × time worked, less the platform fee — 12.20 means 12 hours 20 minutes'
+              : 'rate × time worked, less the platform fee — 12.20 means 12.2 hours'}
+          </span>
         </h2>
         <EditOnly>
           <button className="btn" onClick={() => update((d) => d.accounts.push(newAccount()))}>
-            Add account
+            Add a client
           </button>
         </EditOnly>
       </div>
@@ -34,20 +40,21 @@ export default function AccountsTable({ result, update }: {
         <table>
           <thead>
             <tr>
-              <th>Account</th>
-              <th>Owner</th>
+              <th>Client</th>
+              <th>Looked after by</th>
               <th className="fig">Rate</th>
-              <th>Time entries</th>
-              <th className="fig">Units</th>
-              <th className="fig">Gross</th>
+              <th>Time worked</th>
+              <th className="fig">Total time</th>
+              <th className="fig">Before fee</th>
               <th className="fig">Fee</th>
-              <th className="fig">Adjust</th>
-              <th className="fig">Earned USD</th>
-              <th className="fig">Earned PKR</th>
-              <th className="fig">Split</th>
-              <th className="fig">Team PKR</th>
-              <th className="fig">Company PKR</th>
-              <th>Status</th>
+              <th className="fig">One-off +/−</th>
+              <th className="fig">They pay us</th>
+              <th className="fig">In PKR</th>
+              <th className="fig">Team %</th>
+              <th className="fig">Team gets</th>
+              <th className="fig">Company gets</th>
+              <th>Money in?</th>
+              <th title="The client pays the company's account directly, so this money never reaches you">Straight to company</th>
               <th />
             </tr>
           </thead>
@@ -72,7 +79,7 @@ export default function AccountsTable({ result, update }: {
                     </span>
                   </td>
                   <td><EntriesInput entries={a.entries} onChange={(v) => patch(a.id, { entries: v })} /></td>
-                  <td className="fig mono">{fmtNum(r.units)}</td>
+                  <td className="fig mono">{hoursAsText(r.units)}</td>
                   <td className="fig mono">{fmtUsd(r.grossUsd)}</td>
                   <td className="fig">
                     <NumberInput value={a.feePct} onChange={(v) => patch(a.id, { feePct: v })} width={48} unit="%" />
@@ -97,6 +104,13 @@ export default function AccountsTable({ result, update }: {
                       {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </td>
+                  <td className="mid">
+                    <label className="check" title="The client pays the company's account directly">
+                      <input type="checkbox" checked={a.paidDirect} disabled={!canEdit}
+                        aria-label={`${a.name} is paid straight to the company`}
+                        onChange={(e) => patch(a.id, { paidDirect: e.target.checked })} />
+                    </label>
+                  </td>
                   <td>
                     <EditOnly>
                     <button className="btn icon" title={`Remove ${a.name}`} aria-label={`Remove ${a.name}`}
@@ -110,12 +124,12 @@ export default function AccountsTable({ result, update }: {
               );
             })}
             {!result.accounts.length && (
-              <tr><td colSpan={15} className="empty">No accounts yet — add one, or import a mastersheet.</td></tr>
+              <tr><td colSpan={16} className="empty">No clients yet — add one, or load a sheet.</td></tr>
             )}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={5}>{result.accounts.length} accounts</td>
+              <td colSpan={5}>{result.accounts.length} clients</td>
               <td className="fig mono">{fmtUsd(t.grossUsd)}</td>
               <td className="fig mono">{fmtUsd(t.feeUsd)}</td>
               <td />
@@ -124,7 +138,7 @@ export default function AccountsTable({ result, update }: {
               <td />
               <td className="fig mono">{fmtPkr(t.freelancerPkr)}</td>
               <td className="fig mono">{fmtPkr(t.companyPkr)}</td>
-              <td colSpan={2} />
+              <td colSpan={3} />
             </tr>
           </tfoot>
         </table>

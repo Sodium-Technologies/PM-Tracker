@@ -46,14 +46,16 @@ await page.setInputFiles('#import-file', SHEET);
 await page.waitForTimeout(1800);
 const periodCount = await page.locator('.period').count();
 ok('import creates periods', periodCount >= 11, `${periodCount} periods`);
-const active = (await page.locator('.period.active').innerText()).split('\n')[0];
+// The rail shows the month under a year heading, so the full name lives in the
+// header field.
+const active = await page.locator('.period-name').inputValue();
 console.log(`      active period: ${active}`);
 
 const figures = (await page.locator('.figure').allInnerTexts()).map(t=>t.replace(/\n/g,' '));
 console.log('      figures:', figures.join(' | '));
 
 // 2. Excel export
-const [dl1] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export Excel' }).click()]);
+const [dl1] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download as Excel' }).click()]);
 const xlPath = join(OUT, 'export.xlsx'); await dl1.saveAs(xlPath);
 const wb = XLSX.read(readFileSync(xlPath));
 ok('Excel export downloads', dl1.suggestedFilename() === 'PM Payroll.xlsx', dl1.suggestedFilename());
@@ -69,8 +71,9 @@ const summary = XLSX.utils.sheet_to_json(wb.Sheets['Summary'], { header: 1 });
 ok('Excel summary lists every period', summary.length === periodCount + 1, `${summary.length - 1} rows`);
 
 // 3. payouts export
-await page.getByRole('button', { name: 'Payouts & settlement' }).click();
-const [dl2] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export payouts' }).click()]);
+await page.getByRole('button', { name: 'Paying people' }).click();
+await page.waitForTimeout(300);
+const [dl2] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download this list' }).click()]);
 const pPath = join(OUT, 'payouts.xlsx'); await dl2.saveAs(pPath);
 const pwb = XLSX.read(readFileSync(pPath));
 const prows = XLSX.utils.sheet_to_json(pwb.Sheets['Payouts'], { header: 1 });
@@ -80,13 +83,13 @@ ok('payout export carries per-person pay', !!naveed, `${naveed?.[0]} ${Math.roun
 ok('payout export carries the breakdown', String(naveed?.[6] || '').length > 3);
 
 // 4. JSON backup
-const [dl3] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download backup' }).click()]);
+const [dl3] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save a backup' }).click()]);
 const jPath = join(OUT, 'backup.json'); await dl3.saveAs(jPath);
 const backup = JSON.parse(readFileSync(jPath, 'utf8'));
 ok('backup downloads valid JSON', backup.periods.length === periodCount, `${backup.periods.length} periods`);
 
 // 5. editing recomputes
-await page.getByRole('button', { name: 'Revenue' }).click();
+await page.getByRole('button', { name: 'Money in' }).click();
 await page.waitForTimeout(200);
 const before = await page.locator('.figure').first().innerText();
 await page.locator('#usd-pkr').fill('280');
@@ -97,14 +100,14 @@ await page.locator('#usd-pkr').fill('270');
 await page.waitForTimeout(200);
 
 // 6. roll forward
-await page.getByRole('button', { name: 'New period' }).click();
+await page.getByRole('button', { name: 'Start a new month' }).click();
 await page.waitForTimeout(400);
-const newLabel = await page.locator('.period.active').innerText();
+const newLabel = await page.locator('.period-name').inputValue();
 ok('new period rolls forward under a new label', !newLabel.includes(active), newLabel.replace(/\n/g,' '));
 const rowsAfterRoll = await page.locator('table tbody tr').count();
 ok('roll-forward keeps the accounts', rowsAfterRoll > 0, `${rowsAfterRoll} rows`);
 const unitsCell = await page.locator('table tbody tr').first().locator('td').nth(4).innerText();
-ok('roll-forward clears the hours', unitsCell.trim() === '0', `units ${unitsCell.trim()}`);
+ok('roll-forward clears the hours', /^0h$|^0$/.test(unitsCell.trim()), `units ${unitsCell.trim()}`);
 
 // 7. delete, duplicate
 page.on('dialog', d => d.accept());
@@ -112,8 +115,8 @@ await page.getByRole('button', { name: 'Delete' }).click();
 await page.waitForTimeout(400);
 ok('delete removes the period', (await page.locator('.period').count()) === periodCount, `${await page.locator('.period').count()} left`);
 ok('delete lands on a neighbour, not the first period',
-   (await page.locator('.period.active').innerText()).includes(active),
-   (await page.locator('.period.active').innerText()).replace(/\n/g,' '));
+   (await page.locator('.period-name').inputValue()) === active,
+   await page.locator('.period-name').inputValue());
 
 // 8. persistence
 await page.reload({ waitUntil: 'networkidle' });
@@ -121,8 +124,8 @@ ok('state survives reload', (await page.locator('.period').count()) === periodCo
 
 // 9. wages settled locally
 {
-  await page.getByRole('button', { name: new RegExp(active) }).first().click();
-  await page.getByRole('button', { name: 'Payouts & settlement' }).click();
+  await page.getByRole('button', { name: new RegExp(active.replace(/\s*\d{4}$/, '').replace(/^PM - /, '')) }).first().click();
+  await page.getByRole('button', { name: 'Paying people' }).click();
   await page.waitForTimeout(400);
 
   const remitLine = () => page.locator('.settle .row.final dd').first().innerText();
@@ -133,8 +136,8 @@ ok('state survives reload', (await page.locator('.period').count()) === periodCo
   await page.waitForTimeout(400);
   const after = await remitLine();
   ok('marking someone paid here lowers what must be remitted', before !== after, `${before} → ${after}`);
-  ok('the settlement names the wages paid here',
-     /Wages paid here/.test(await page.locator('.settle').innerText()));
+  ok('the settlement names what you paid yourself',
+     /You paid it yourself/.test(await page.locator('.settle').first().innerText()));
   ok('the wages panel lists the person', /pay/.test(await page.locator('.panel.wages').innerText()));
 
   await page.locator('.panel.wages').getByRole('button', { name: 'Add' }).click();
@@ -145,26 +148,26 @@ ok('state survives reload', (await page.locator('.period').count()) === periodCo
   const afterDraw = await remitLine();
   ok('a drawn wage lowers it further', afterDraw !== after, `${after} → ${afterDraw}`);
   ok('apply-to-all is offered once somebody is marked',
-     (await page.getByRole('button', { name: 'Apply to all periods' }).count()) === 1);
-  await page.getByRole('button', { name: 'Apply to all periods' }).click();
+     (await page.getByRole('button', { name: 'Use in every month' }).count()) === 1);
+  await page.getByRole('button', { name: 'Use in every month' }).click();
   await page.waitForTimeout(600);
   ok('applying across periods reports what it did',
      /paid here in \d+ more periods|Already applied/.test(await page.locator('.toast').innerText().catch(() => '')));
 }
 
 // 10. division allocation display
-await page.getByRole('button', { name: new RegExp(active) }).first().click();
-await page.getByRole('button', { name: 'Division' }).click();
+await page.getByRole('button', { name: new RegExp(active.replace(/\s*\d{4}$/, '').replace(/^PM - /, '')) }).first().click();
+await page.getByRole('button', { name: 'Who gets what' }).click();
 await page.waitForTimeout(300);
 const allocs = await page.locator('tfoot .alloc-ok, tfoot .alloc-off').allInnerTexts();
 ok('every account fully allocated', allocs.length > 0 && allocs.every(a => a === '100%'), allocs.join(' '));
 
-await page.getByRole('button', { name: 'Revenue' }).click();
+await page.getByRole('button', { name: 'Money in' }).click();
 await page.screenshot({ path: join(OUT, 'revenue.png'), fullPage: false });
-await page.getByRole('button', { name: 'Payouts & settlement' }).click();
+await page.getByRole('button', { name: 'Paying people' }).click();
 await page.screenshot({ path: join(OUT, 'payouts.png'), fullPage: false });
 await page.emulateMedia({ colorScheme: 'dark' });
-await page.getByRole('button', { name: 'Division' }).click();
+await page.getByRole('button', { name: 'Who gets what' }).click();
 await page.screenshot({ path: join(OUT, 'division-dark.png'), fullPage: false });
 
 console.log(errs.length ? '\nJS ERRORS:\n' + errs.join('\n') : '\nNo JS errors.');

@@ -1,10 +1,17 @@
 import type { Account, Period, StaffMember } from './types';
+import { entriesToHours, entryProblems, type TimeFormat } from './time';
 
 export const sum = (xs: number[]) => xs.reduce((a, b) => a + (Number(b) || 0), 0);
+
+/** Rounding is for showing a number, never for working one out: a figure
+ *  rounded mid-calculation carries its error into every total built on it.
+ *  Everything below keeps full precision; the formatters at the bottom round
+ *  once, at the moment a person reads it. */
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export interface AccountResult {
   account: Account;
+  /** time on this account, in hours */
   units: number;
   grossUsd: number;
   feeUsd: number;
@@ -18,20 +25,25 @@ export interface AccountResult {
   allocated: number;
 }
 
-export function computeAccount(account: Account, staff: StaffMember[], usdToPkr: number): AccountResult {
-  const units = sum(account.entries);
+export function computeAccount(
+  account: Account,
+  staff: StaffMember[],
+  usdToPkr: number,
+  timeFormat: TimeFormat,
+): AccountResult {
+  const units = entriesToHours(account.entries, timeFormat);
   // All of the arithmetic happens in the account's own currency, then converts
   // once — an account settled in PKR never depends on the conversion rate.
-  const gross = round2(account.rate * units);
-  const fee = round2(gross * (account.feePct / 100));
-  const earned = round2(gross - fee + (Number(account.adjustmentUsd) || 0));
+  const gross = account.rate * units;
+  const fee = gross * (account.feePct / 100);
+  const earned = gross - fee + (Number(account.adjustmentUsd) || 0);
   const inPkr = account.currency === 'PKR';
-  const toUsd = (v: number) => (inPkr ? (usdToPkr ? round2(v / usdToPkr) : 0) : v);
-  const toPkr = (v: number) => (inPkr ? v : round2(v * usdToPkr));
+  const toUsd = (v: number) => (inPkr ? (usdToPkr ? v / usdToPkr : 0) : v);
+  const toPkr = (v: number) => (inPkr ? v : v * usdToPkr);
 
   const earnedUsd = toUsd(earned);
-  const freelancerUsd = round2(earnedUsd * (account.freelancerPct / 100));
-  const freelancerPkr = round2(toPkr(earned) * (account.freelancerPct / 100));
+  const freelancerUsd = earnedUsd * (account.freelancerPct / 100);
+  const freelancerPkr = toPkr(earned) * (account.freelancerPct / 100);
   const allocated = sum(staff.map((s) => s.shares[account.id] || 0));
   return {
     account,
@@ -42,8 +54,8 @@ export function computeAccount(account: Account, staff: StaffMember[], usdToPkr:
     earnedPkr: toPkr(earned),
     freelancerUsd,
     freelancerPkr,
-    companyUsd: round2(earnedUsd - freelancerUsd),
-    companyPkr: round2(toPkr(earned) - freelancerPkr),
+    companyUsd: earnedUsd - freelancerUsd,
+    companyPkr: toPkr(earned) - freelancerPkr,
     allocated,
   };
 }
@@ -71,21 +83,24 @@ export interface PeriodResult {
     companyUsd: number;
     companyPkr: number;
     staffPayPkr: number;
-    /** freelancer pool left unassigned because staff shares don't add to 100% */
+    /** team money left unassigned because the shares don't add to 100% */
     unallocatedPkr: number;
   };
   ledger: {
     otherPayablesPkr: number;
-    /** everything owed this period: staff pay + outside payables + company share */
+    /** everything owed this period: team pay + other people + company share */
     transferablePkr: number;
+    /** money from clients who pay the company directly — never passes through
+     *  the person keeping the books, so it is not theirs to send on */
+    directPkr: number;
     reimbursementsPkr: number;
-    /** pay of people whose wages are settled locally */
+    /** pay of people whose wages are handed over locally */
     retainedPkr: number;
-    /** retained pay plus the drawn wage lines: everything paid out on the spot */
+    /** retained pay plus anything drawn on top */
     localWagesPkr: number;
     withheldPkr: number;
     transfersPkr: number;
-    /** what still has to be remitted */
+    /** what is left to send */
     remainingPkr: number;
   };
   warnings: string[];
@@ -93,66 +108,70 @@ export interface PeriodResult {
 
 export function computePeriod(period: Period): PeriodResult {
   const rate = Number(period.usdToPkr) || 0;
-  const accounts = period.accounts.map((a) => computeAccount(a, period.staff, rate));
+  const timeFormat: TimeFormat = period.timeFormat ?? 'decimal';
+  const accounts = period.accounts.map((a) => computeAccount(a, period.staff, rate, timeFormat));
 
   const staff: StaffResult[] = period.staff.map((s) => {
     const byAccount: Record<string, number> = {};
     let sharePkr = 0;
     for (const ar of accounts) {
       const share = Number(s.shares[ar.account.id]) || 0;
-      const amount = round2(ar.freelancerPkr * share);
+      const amount = ar.freelancerPkr * share;
       if (amount) byAccount[ar.account.id] = amount;
       sharePkr += amount;
     }
-    sharePkr = round2(sharePkr);
-    const payPkr = round2(sharePkr + (Number(s.adjustmentPkr) || 0));
-    return { staff: s, byAccount, sharePkr, payPkr, payUsd: rate ? round2(payPkr / rate) : 0 };
+    const payPkr = sharePkr + (Number(s.adjustmentPkr) || 0);
+    return { staff: s, byAccount, sharePkr, payPkr, payUsd: rate ? payPkr / rate : 0 };
   });
 
   const t = {
-    grossUsd: round2(sum(accounts.map((a) => a.grossUsd))),
-    feeUsd: round2(sum(accounts.map((a) => a.feeUsd))),
-    earnedUsd: round2(sum(accounts.map((a) => a.earnedUsd))),
-    earnedPkr: round2(sum(accounts.map((a) => a.earnedPkr))),
-    freelancerUsd: round2(sum(accounts.map((a) => a.freelancerUsd))),
-    freelancerPkr: round2(sum(accounts.map((a) => a.freelancerPkr))),
-    companyUsd: round2(sum(accounts.map((a) => a.companyUsd))),
-    companyPkr: round2(sum(accounts.map((a) => a.companyPkr))),
-    staffPayPkr: round2(sum(staff.map((s) => s.payPkr))),
+    grossUsd: sum(accounts.map((a) => a.grossUsd)),
+    feeUsd: sum(accounts.map((a) => a.feeUsd)),
+    earnedUsd: sum(accounts.map((a) => a.earnedUsd)),
+    earnedPkr: sum(accounts.map((a) => a.earnedPkr)),
+    freelancerUsd: sum(accounts.map((a) => a.freelancerUsd)),
+    freelancerPkr: sum(accounts.map((a) => a.freelancerPkr)),
+    companyUsd: sum(accounts.map((a) => a.companyUsd)),
+    companyPkr: sum(accounts.map((a) => a.companyPkr)),
+    staffPayPkr: sum(staff.map((s) => s.payPkr)),
     unallocatedPkr: 0,
   };
-  t.unallocatedPkr = round2(t.freelancerPkr - round2(sum(staff.map((x) => x.sharePkr))));
+  t.unallocatedPkr = t.freelancerPkr - sum(staff.map((x) => x.sharePkr));
 
-  const otherPayablesPkr = round2(sum(period.otherPayables.map((x) => x.amountPkr)));
-  const withheldPkr = round2(sum(period.withheld.map((x) => x.amountPkr)));
-  const transfersPkr = round2(sum(period.transfers.map((x) => x.amountPkr)));
-  const reimbursementsPkr = round2(sum(period.reimbursements.map((r) => r.amountUsd)) * rate);
-  const retainedPkr = round2(sum(staff.filter((s) => s.staff.retained).map((s) => s.payPkr)));
+  const otherPayablesPkr = sum(period.otherPayables.map((x) => x.amountPkr));
+  const withheldPkr = sum(period.withheld.map((x) => x.amountPkr));
+  const transfersPkr = sum(period.transfers.map((x) => x.amountPkr));
+  const reimbursementsPkr = sum(period.reimbursements.map((r) => r.amountUsd)) * rate;
+  const retainedPkr = sum(staff.filter((s) => s.staff.retained).map((s) => s.payPkr));
   // Wages handed over where the books are kept: the pay of people marked as
   // settled locally, plus any amount drawn on top (a salary, an extra share).
-  const localWagesPkr = round2(retainedPkr + sum(period.localWages.map((x) => x.amountPkr)));
+  const localWagesPkr = retainedPkr + sum(period.localWages.map((x) => x.amountPkr));
+  // Clients who pay the company's account directly: the whole amount — the
+  // team's part and the company's part — is already where it needs to be.
+  const directPkr = sum(accounts.filter((a) => a.account.paidDirect).map((a) => a.earnedPkr));
 
   // Everything owed for the period …
-  const transferablePkr = round2(t.staffPayPkr + otherPayablesPkr + t.companyPkr);
-  // … less what never has to travel: expenses already covered on the receiving
-  // side, pay that stays put, amounts held back, and money already sent.
-  const remainingPkr = round2(
-    transferablePkr - reimbursementsPkr - localWagesPkr - withheldPkr - transfersPkr,
-  );
+  const transferablePkr = t.staffPayPkr + otherPayablesPkr + t.companyPkr;
+  // … less every reason a rupee of it does not have to be sent.
+  const remainingPkr =
+    transferablePkr - directPkr - reimbursementsPkr - localWagesPkr - withheldPkr - transfersPkr;
 
   const warnings: string[] = [];
-  if (!rate) warnings.push('USD→PKR conversion rate is not set for this period.');
+  if (!rate) warnings.push('The USD to PKR rate for this month has not been set.');
   for (const ar of accounts) {
     const pct = round2(ar.allocated * 100);
     if (ar.earnedUsd !== 0 && pct !== 100) {
       warnings.push(
-        `${ar.account.name}: staff shares total ${pct}% (should be 100%) — ` +
-          `${round2(ar.freelancerPkr * (1 - ar.allocated)).toLocaleString()} PKR unassigned.`,
+        `${ar.account.name}: the shares add up to ${pct}%, not 100% — `
+        + `PKR ${Math.round(ar.freelancerPkr * (1 - ar.allocated)).toLocaleString()} is not going to anyone.`,
       );
+    }
+    for (const problem of entryProblems(ar.account.entries, timeFormat)) {
+      warnings.push(`${ar.account.name}: a time entry reads ${problem}`);
     }
   }
   if (period.accounts.some((a) => a.freelancerPct < 0 || a.freelancerPct > 100))
-    warnings.push('An account has a freelancer split outside 0–100%.');
+    warnings.push('An account gives the team less than 0% or more than 100%.');
 
   return {
     accounts,
@@ -161,6 +180,7 @@ export function computePeriod(period: Period): PeriodResult {
     ledger: {
       otherPayablesPkr,
       transferablePkr,
+      directPkr,
       reimbursementsPkr,
       retainedPkr,
       localWagesPkr,

@@ -19,13 +19,13 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
     <div className="cols">
       <section className="panel">
         <div className="panel-head">
-          <h2>Payout register <span className="hint">what each person is owed this period</span></h2>
+          <h2>What each person is owed <span className="hint">this month</span></h2>
           <div className="head-actions">
             {canEdit && result.staff.some((s) => s.staff.retained) && (
-              <button className="btn" title="Apply the paid-here marks to every period"
-                onClick={onApplyPaidHereEverywhere}>Apply to all periods</button>
+              <button className="btn" title="Use these same marks in every month"
+                onClick={onApplyPaidHereEverywhere}>Use in every month</button>
             )}
-            <button className="btn" onClick={() => exportPayoutSheet(period)}>Export payouts</button>
+            <button className="btn" onClick={() => exportPayoutSheet(period)}>Download this list</button>
           </div>
         </div>
         <div className="scroll">
@@ -33,11 +33,11 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
             <thead>
               <tr>
                 <th>Name</th>
-                <th className="fig">From shares</th>
-                <th className="fig">Adjustment</th>
-                <th className="fig">Pay PKR</th>
-                <th className="fig">USD</th>
-                <th title="Their pay is handed over here instead of being remitted — recorded as a wage either way">Paid here</th>
+                <th className="fig">From their shares</th>
+                <th className="fig">Change by hand</th>
+                <th className="fig">Total pay</th>
+                <th className="fig">In USD</th>
+                <th title="You hand this person their pay yourself, so it does not need sending">You pay them</th>
               </tr>
             </thead>
             <tbody>
@@ -48,7 +48,7 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
                     <span className="sub">
                       {Object.entries(s.byAccount)
                         .map(([id, v]) => `${accountName(id)} ${Math.round(v).toLocaleString()}`)
-                        .join(' · ') || 'no shares assigned'}
+                        .join(' · ') || 'no share of any client yet'}
                     </span>
                   </td>
                   <td className="fig mono">{fmtPkr(s.sharePkr)}</td>
@@ -72,7 +72,7 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
                   </td>
                 </tr>
               ))}
-              {!result.staff.length && <tr><td colSpan={6} className="empty">No team members yet.</td></tr>}
+              {!result.staff.length && <tr><td colSpan={6} className="empty">Nobody added yet.</td></tr>}
             </tbody>
             <tfoot>
               <tr>
@@ -91,7 +91,7 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
       <div className="stack">
         <section className="panel wages">
           <div className="panel-head">
-            <h2>Wages paid here <span className="hint">settled locally, not remitted</span></h2>
+            <h2>You paid this yourself <span className="hint">so it does not need sending</span></h2>
             <EditOnly>
               <button className="btn" onClick={() => update((d) => d.localWages.push({
                 id: uid(), label: 'Draw', amountPkr: 0,
@@ -104,7 +104,7 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
                 <tr key={s.staff.id}>
                   <td>{s.staff.name} <span className="tag-inline">pay</span></td>
                   <td className="fig mono">{fmtPkr(s.payPkr)}</td>
-                  <td className="muted small">from the division</td>
+                  <td className="muted small">their share of the work</td>
                   <td />
                 </tr>
               ))}
@@ -116,7 +116,7 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
                     <NumberInput value={w.amountPkr} width={96} unit="PKR"
                       onChange={(v) => update((d) => { const x = d.localWages.find((y) => y.id === w.id); if (x) x.amountPkr = v; })} />
                   </td>
-                  <td className="muted small">drawn</td>
+                  <td className="muted small">taken by you</td>
                   <td>
                     <EditOnly>
                       <button className="btn icon" aria-label={`Remove ${w.label}`} onClick={() => update((d) => {
@@ -127,13 +127,13 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
                 </tr>
               ))}
               {!L.localWagesPkr && !period.localWages.length && (
-                <tr><td colSpan={4} className="empty">Nothing settled locally this period.</td></tr>
+                <tr><td colSpan={4} className="empty">You have not paid anyone yourself this month.</td></tr>
               )}
             </tbody>
             {L.localWagesPkr > 0 && (
               <tfoot>
                 <tr>
-                  <td>Total paid here</td>
+                  <td>Total you paid</td>
                   <td className="fig mono total">{fmtPkr(L.localWagesPkr)}</td>
                   <td colSpan={2} />
                 </tr>
@@ -143,25 +143,26 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
         </section>
 
         <section className="panel">
-          <div className="panel-head"><h2>Settlement</h2><span className="hint">PKR</span></div>
+          <div className="panel-head"><h2>What is left to send</h2><span className="hint">all figures in PKR</span></div>
           <dl className="settle">
-            <div className="row"><dt>Team payouts</dt><dd>{fmtPkr(result.totals.staffPayPkr)}</dd></div>
-            <div className="row"><dt>Payables outside the matrix</dt><dd>{fmtPkr(L.otherPayablesPkr)}</dd></div>
-            <div className="row"><dt>Company share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
-            <div className="row rule"><dt>Owed this period</dt><dd>{fmtPkr(L.transferablePkr)}</dd></div>
-            <div className="row"><dt>Reimbursements already covered</dt><dd>−{fmtPkr(L.reimbursementsPkr)}</dd></div>
-            <div className="row"><dt>Wages paid here</dt><dd>−{fmtPkr(L.localWagesPkr)}</dd></div>
-            <div className="row"><dt>Held back</dt><dd>−{fmtPkr(L.withheldPkr)}</dd></div>
-            <div className="row"><dt>Already transferred</dt><dd>−{fmtPkr(L.transfersPkr)}</dd></div>
+            <div className="row"><dt>Pay for the team</dt><dd>{fmtPkr(result.totals.staffPayPkr)}</dd></div>
+            <div className="row"><dt>Other people to pay</dt><dd>{fmtPkr(L.otherPayablesPkr)}</dd></div>
+            <div className="row"><dt>The company's share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
+            <div className="row rule"><dt>Total to pay out</dt><dd>{fmtPkr(L.transferablePkr)}</dd></div>
+            <div className="row"><dt>Went straight to the company</dt><dd>−{fmtPkr(L.directPkr)}</dd></div>
+            <div className="row"><dt>Already spent on that side</dt><dd>−{fmtPkr(L.reimbursementsPkr)}</dd></div>
+            <div className="row"><dt>You paid it yourself</dt><dd>−{fmtPkr(L.localWagesPkr)}</dd></div>
+            <div className="row"><dt>Kept back this month</dt><dd>−{fmtPkr(L.withheldPkr)}</dd></div>
+            <div className="row"><dt>Already sent</dt><dd>−{fmtPkr(L.transfersPkr)}</dd></div>
             <div className={`row final${L.remainingPkr < 0 ? ' negative' : ''}`}>
-              <dt>Still to remit</dt><dd>{fmtPkr(L.remainingPkr)}</dd>
+              <dt>Left to send</dt><dd>{fmtPkr(L.remainingPkr)}</dd>
             </div>
           </dl>
         </section>
 
         <LineItems
-          title="Reimbursements"
-          hint="USD spent on that side"
+          title="Money already spent there"
+          hint="in USD — subscriptions, advances"
           rows={period.reimbursements.map((r) => ({ id: r.id, label: r.label, amountPkr: round2(r.amountUsd * period.usdToPkr) }))}
           usd={period.reimbursements}
           period={period}
@@ -172,7 +173,8 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
         />
 
         <LineItems
-          title="Payables outside the matrix"
+          title="Other people to pay"
+          hint="anyone with no share of a client"
           rows={period.otherPayables}
           period={period}
           onAdd={() => update((d) => d.otherPayables.push({ id: uid(), label: 'Name', amountPkr: 0 }))}
@@ -182,8 +184,8 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
         />
 
         <LineItems
-          title="Held back"
-          hint="kept this period"
+          title="Kept back this month"
+          hint="not sent, not spent"
           rows={period.withheld}
           period={period}
           onAdd={() => update((d) => d.withheld.push({ id: uid(), label: 'NA kept', amountPkr: 0 }))}
@@ -194,7 +196,7 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
 
         <section className="panel">
           <div className="panel-head">
-            <h2>Transfers made</h2>
+            <h2>Money already sent</h2>
             <EditOnly>
               <button className="btn" onClick={() => update((d) => d.transfers.push({
                 id: uid(), label: 'Transfer', amountPkr: 0, date: new Date().toISOString().slice(0, 10),
@@ -224,7 +226,7 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
                   </td>
                 </tr>
               ))}
-              {!period.transfers.length && <tr><td className="empty">Nothing sent yet.</td></tr>}
+              {!period.transfers.length && <tr><td className="empty">Nothing sent yet this month.</td></tr>}
             </tbody>
           </table>
         </section>

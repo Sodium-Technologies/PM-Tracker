@@ -76,6 +76,10 @@ export function parseSheet(label: string, ws: XLSX.WorkSheet): Period | null {
   const cAdjustment = colIndex(H, 'Adjustment', 'Adjust');
 
   const period = newPeriod(label, 0);
+  // A spreadsheet that multiplies rate by 12.2 meant 12.2 hours. Reading those
+  // same numbers as 12 h 20 m would silently change every figure in the month,
+  // so an imported month keeps the meaning it was written with.
+  period.timeFormat = 'decimal';
 
   if (cConv >= 0) {
     for (let r = hr + 1; r < Math.min(grid.length, hr + 6); r++) {

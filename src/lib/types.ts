@@ -2,6 +2,7 @@
  *  are all user-defined at runtime — nothing about the roster is hard-coded. */
 
 export type Currency = 'USD' | 'PKR';
+export type { TimeFormat } from './time';
 
 export interface Account {
   id: string;
@@ -27,6 +28,9 @@ export interface Account {
   /** Percentage of net revenue paid out to the freelancer pool (rest is company). */
   freelancerPct: number;
   status: string;
+  /** The client pays the company's account directly, so this money never passes
+   *  through the person keeping the books and is not theirs to send on. */
+  paidDirect: boolean;
   notes: string;
 }
 
@@ -75,6 +79,10 @@ export interface Period {
   /** e.g. "August 2026" */
   label: string;
   usdToPkr: number;
+  /** How to read the time column: 'hm' means 12.20 is 12 hours 20 minutes,
+   *  'decimal' means it is 12.2 hours. Imported months keep 'decimal', which is
+   *  what the spreadsheet they came from meant. */
+  timeFormat: import('./time').TimeFormat;
   accounts: Account[];
   staff: StaffMember[];
   reimbursements: Reimbursement[];

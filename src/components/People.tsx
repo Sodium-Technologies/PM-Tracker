@@ -2,9 +2,9 @@ import React from 'react';
 import { grantAccess, listAccounts, revokeAccess, type Account, type Role } from '../lib/auth';
 
 const ROLES: { value: Role; label: string; what: string }[] = [
-  { value: 'viewer', label: 'View only', what: 'reads every figure, changes nothing' },
-  { value: 'editor', label: 'Can edit', what: 'edits the books' },
-  { value: 'super_admin', label: 'Administrator', what: 'edits the books and manages access' },
+  { value: 'viewer', label: 'Can look', what: 'sees every figure, changes nothing' },
+  { value: 'editor', label: 'Can change', what: 'edits the figures' },
+  { value: 'super_admin', label: 'Runs it', what: 'edits the figures and decides who gets in' },
 ];
 
 /** Access list. Only an administrator can open this, and only an administrator's
@@ -48,7 +48,7 @@ export default function People({ me, onChanged }: { me: string | null; onChanged
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Who has access <span className="hint">by email address</span></h2>
+        <h2>Who can open this <span className="hint">one email address each</span></h2>
       </div>
 
       <form className="grant" onSubmit={add}>
@@ -65,7 +65,7 @@ export default function People({ me, onChanged }: { me: string | null; onChanged
           onChange={(e) => setRole(e.target.value as Role)}>
           {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
-        <button className="btn primary" type="submit" disabled={busy}>Give access</button>
+        <button className="btn primary" type="submit" disabled={busy}>Let them in</button>
       </form>
 
       <table>
@@ -79,7 +79,7 @@ export default function People({ me, onChanged }: { me: string | null; onChanged
               <tr key={r.email}>
                 <td>
                   {r.email}
-                  {isMe && <span className="sub">you — your own access cannot be changed here</span>}
+                  {isMe && <span className="sub">this is you — you cannot change your own access</span>}
                 </td>
                 <td>
                   <select
@@ -101,7 +101,7 @@ export default function People({ me, onChanged }: { me: string | null; onChanged
               </tr>
             );
           })}
-          {!rows.length && <tr><td colSpan={3} className="empty">Nobody added yet.</td></tr>}
+          {!rows.length && <tr><td colSpan={3} className="empty">Nobody else yet.</td></tr>}
         </tbody>
       </table>
 
@@ -114,9 +114,9 @@ export default function People({ me, onChanged }: { me: string | null; onChanged
       </dl>
 
       <p className="panel-foot">
-        Someone you add signs in with a link sent to that address. Until you add an
-        address, signing in shows them nothing — the database refuses the data, not
-        just the page.
+        Anyone you add signs in with a link sent to that address. Until their address
+        is on this list they see nothing at all — the figures are held back by the
+        database itself, not just hidden on the page.
       </p>
     </section>
   );

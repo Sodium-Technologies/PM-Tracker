@@ -63,7 +63,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
       .then((data: AppState | null) => {
         if (cancelled || !data?.periods?.length) return;
         setState(normalize(data));
-        setToast(`Loaded ${data.periods.length} periods`);
+        setToast(`Loaded ${data.periods.length} months`);
       })
       .catch(() => { /* no seed shipped — start empty */ });
     return () => { cancelled = true; };
@@ -137,7 +137,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
   const deletePeriod = async () => {
     if (state.periods.length === 1) return;
-    if (!confirm(`Delete "${period.label}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete ${period.label}? This cannot be undone.`)) return;
     const removing = period.id;
     setState((s) => {
       const at = s.periods.findIndex((p) => p.id === period.id);
@@ -145,7 +145,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
       // Land on the neighbour, not back at the top of the list.
       return { ...s, periods, activePeriodId: periods[Math.min(at, periods.length - 1)].id };
     });
-    setToast('Period deleted');
+    setToast('Month deleted');
     if (cloudEnabled) {
       const { error } = await cloud.deletePeriod(removing);
       if (error) setToast(`Not deleted: ${error}`);
@@ -158,7 +158,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         const restored = normalize(JSON.parse(await file.text()) as AppState);
         if (!restored.periods?.length) throw new Error('no periods in that backup');
         setState(restored);
-        setToast(`Restored ${restored.periods.length} periods from backup`);
+        setToast(`Restored ${restored.periods.length} months from the backup`);
         if (cloudEnabled) {
           const { error } = await cloud.uploadPeriods(restored.periods);
           if (error) setToast(`Restored locally, but not shared: ${error}`);
@@ -166,7 +166,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         return;
       }
       const periods = await importWorkbook(file);
-      if (!periods.length) { setToast('No payroll sheets recognised in that file'); return; }
+      if (!periods.length) { setToast('That file has no payroll months in it'); return; }
       setState((s) => ({
         ...s,
         // An untouched starter period is scaffolding, not data — drop it once
@@ -174,10 +174,10 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         periods: [...s.periods.filter((p) => p.accounts.length || p.staff.length), ...periods],
         activePeriodId: periods[periods.length - 1].id,
       }));
-      setToast(`Imported ${periods.length} period${periods.length > 1 ? 's' : ''}`);
+      setToast(`Loaded ${periods.length} month${periods.length > 1 ? 's' : ''}`);
       if (cloudEnabled) {
         const { error } = await cloud.uploadPeriods(periods);
-        setToast(error ? `Imported, but not shared: ${error}` : `Imported ${periods.length} periods — shared with everyone who has access`);
+        setToast(error ? `Loaded, but not shared: ${error}` : `Loaded ${periods.length} months — everyone with access can see them`);
       }
     } catch (e) {
       setToast(`Could not read that file: ${(e as Error).message}`);
@@ -228,7 +228,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
   const exportExcel = () => {
     exportWorkbook(state.periods, 'PM Payroll.xlsx');
-    setToast(`Exported ${state.periods.length} periods to Excel`);
+    setToast(`Downloaded ${state.periods.length} months as Excel`);
   };
 
   return (
@@ -240,32 +240,42 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           <span>payroll ledger</span>
         </div>
 
-        <div className="rail-label">Periods</div>
+        <div className="rail-label">Months</div>
         <nav className="period-list">
-          {state.periods.map((p) => {
+          {state.periods.map((p, i) => {
             const r = computePeriod(p);
+            const year = p.label.match(/\d{4}/)?.[0];
+            const previousYear = state.periods[i - 1]?.label.match(/\d{4}/)?.[0];
             return (
-              <button
-                key={p.id}
-                className={`period${p.id === period.id ? ' active' : ''}`}
-                onClick={() => setState((s) => ({ ...s, activePeriodId: p.id }))}
-              >
-                <span>{p.label}</span>
-                <span className="period-sum">{r.totals.earnedUsd ? fmtUsd(r.totals.earnedUsd) : '—'}</span>
-              </button>
+              <React.Fragment key={p.id}>
+                {year && year !== previousYear && <div className="year-mark">{year}</div>}
+                <button
+                  className={`period${p.id === period.id ? ' active' : ''}`}
+                  onClick={() => setState((s) => ({ ...s, activePeriodId: p.id }))}
+                >
+                  <span>{p.label.replace(/\s*\d{4}$/, '').replace(/^PM - /, '')}</span>
+                  <span className="period-sum">{r.totals.earnedUsd ? fmtUsd(r.totals.earnedUsd) : '—'}</span>
+                </button>
+              </React.Fragment>
             );
           })}
         </nav>
 
         <div className="rail-actions">
-          {canEdit && <button className="btn wide primary" onClick={addPeriod}>New period</button>}
+          {canEdit && <button className="btn wide primary" onClick={addPeriod}>Start a new month</button>}
           <input ref={fileRef} id="import-file" type="file" accept=".xlsx,.xls,.csv,.json" hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
           {canEdit && (
-            <button className="btn wide" onClick={() => fileRef.current?.click()}>Import sheet or backup</button>
+            <button className="btn wide" onClick={() => fileRef.current?.click()}>Load a sheet or backup</button>
           )}
-          <button className="btn wide" onClick={exportExcel}>Export Excel</button>
-          <button className="btn wide" onClick={backup}>Download backup</button>
+          <button className="btn wide" onClick={exportExcel}>Download as Excel</button>
+          <button className="btn wide" onClick={backup}>Save a backup</button>
+          {auth.isSuperAdmin && (
+            <button className={`btn wide${tab === 'access' ? ' primary' : ''}`}
+              onClick={() => setTab(tab === 'access' ? 'overview' : 'access')}>
+              Who can open this
+            </button>
+          )}
         </div>
 
         {cloudEnabled ? (
@@ -278,7 +288,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
             <button className="link" onClick={auth.signOut}>Sign out</button>
           </div>
         ) : (
-          <div className="rail-foot">Saved in this browser. Export before switching devices.</div>
+          <div className="rail-foot">Saved in this browser only. Download a backup before switching devices.</div>
         )}
       </aside>
 
@@ -287,10 +297,20 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           <input className="period-name" value={period.label} aria-label="Period name"
             onChange={(e) => update((d) => { d.label = e.target.value; })} />
           <div className="rate-field">
-            <label htmlFor="usd-pkr">USD → PKR</label>
+            <label htmlFor="usd-pkr">$1 =</label>
             <NumberInput id="usd-pkr" value={period.usdToPkr} width={62}
               onChange={(v) => update((d) => { d.usdToPkr = v; })} />
+            <span className="tag">PKR</span>
           </div>
+          <label className="rate-field" htmlFor="time-format">
+            <span>Time written as</span>
+            <select id="time-format" className="cell-input" value={period.timeFormat}
+              disabled={!canEdit}
+              onChange={(e) => update((d) => { d.timeFormat = e.target.value as Period['timeFormat']; })}>
+              <option value="hm">12.20 = 12 hours 20 minutes</option>
+              <option value="decimal">12.20 = 12.2 hours</option>
+            </select>
+          </label>
           <div className="spacer" />
           {canEdit ? (
             <>
@@ -298,7 +318,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
               <button className="btn" onClick={deletePeriod} disabled={state.periods.length === 1}>Delete</button>
             </>
           ) : (
-            <span className="readonly-badge">View only</span>
+            <span className="readonly-badge">You can look, not change</span>
           )}
         </header>
 
@@ -312,12 +332,12 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         )}
 
         <dl className="figures">
-          <Figure label="Earned" value={fmtUsd(result.totals.earnedUsd)} sub={fmtPkr(result.totals.earnedPkr)} />
-          <Figure label="Team pool" value={fmtPkr(result.totals.freelancerPkr)} sub={fmtUsd(result.totals.freelancerUsd)} />
-          <Figure label="Company share" value={fmtPkr(result.totals.companyPkr)} sub={fmtUsd(result.totals.companyUsd)} />
-          <Figure label="Owed this period" value={fmtPkr(result.ledger.transferablePkr)}
-            sub={`${period.staff.length} people · ${period.accounts.length} accounts`} />
-          <Figure label="Still to remit" value={fmtPkr(result.ledger.remainingPkr)}
+          <Figure label="Money earned" value={fmtUsd(result.totals.earnedUsd)} sub={fmtPkr(result.totals.earnedPkr)} />
+          <Figure label="The team's share" value={fmtPkr(result.totals.freelancerPkr)} sub={fmtUsd(result.totals.freelancerUsd)} />
+          <Figure label="The company's share" value={fmtPkr(result.totals.companyPkr)} sub={fmtUsd(result.totals.companyUsd)} />
+          <Figure label="Total to pay out" value={fmtPkr(result.ledger.transferablePkr)}
+            sub={`${period.staff.length} people · ${period.accounts.length} clients`} />
+          <Figure label="Left to send" value={fmtPkr(result.ledger.remainingPkr)}
             sub={`of ${fmtPkr(result.ledger.transferablePkr)}`}
             lead negative={result.ledger.remainingPkr < 0} />
         </dl>
@@ -331,10 +351,9 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <nav className="tabs">
           {([
             ['overview', 'Summary'],
-            ['revenue', 'Revenue'],
-            ['division', 'Division'],
-            ['payouts', 'Payouts & settlement'],
-            ...(auth.isSuperAdmin ? [['access', 'Access'] as const] : []),
+            ['revenue', 'Money in'],
+            ['division', 'Who gets what'],
+            ['payouts', 'Paying people'],
           ] as const).map(([id, label]) => (
             <button key={id} className={`tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id as Tab)}>
               {label}
@@ -351,7 +370,9 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
               onPick={(id) => setState((s) => ({ ...s, activePeriodId: id }))}
             />
           )}
-          {tab === 'revenue' && <AccountsTable result={result} update={update} />}
+          {tab === 'revenue' && (
+            <AccountsTable result={result} update={update} timeFormat={period.timeFormat} />
+          )}
           {tab === 'division' && <DivisionMatrix period={period} result={result} update={update} />}
           {tab === 'payouts' && (
             <Ledger period={period} result={result} update={update}
@@ -370,9 +391,9 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
 }
 
 function roleLabel(role: string | null) {
-  if (role === 'super_admin') return 'Administrator';
-  if (role === 'editor') return 'Can edit';
-  if (role === 'viewer') return 'View only';
+  if (role === 'super_admin') return 'Runs it';
+  if (role === 'editor') return 'Can change';
+  if (role === 'viewer') return 'Can look';
   return 'No access';
 }
 

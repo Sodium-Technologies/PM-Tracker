@@ -40,15 +40,15 @@ export default function Overview({ periods, period, result, onPick }: {
     <div className="overview">
       <section className="panel span-2">
         <div className="panel-head">
-          <h2>Earned by period <span className="hint">USD invoiced, after fees</span></h2>
-          <span className="hint">select a bar to open that period</span>
+          <h2>Money earned each month <span className="hint">in USD, after fees</span></h2>
+          <span className="hint">click a bar to open that month</span>
         </div>
         <Trend history={history} activeId={period.id} onPick={onPick} />
       </section>
 
       <section className="panel">
         <div className="panel-head">
-          <h2>This period</h2>
+          <h2>This month</h2>
           {change !== null && (
             <span className={`delta ${change >= 0 ? 'up' : 'down'}`}>
               {change >= 0 ? '▲' : '▼'} {Math.abs(change)}% vs {previous?.period.label}
@@ -56,29 +56,32 @@ export default function Overview({ periods, period, result, onPick }: {
           )}
         </div>
         <dl className="settle">
-          <div className="row"><dt>Earned</dt><dd>{fmtUsd(result.totals.earnedUsd)}</dd></div>
-          <div className="row"><dt>Team pool</dt><dd>{fmtPkr(result.totals.freelancerPkr)}</dd></div>
-          <div className="row"><dt>Company share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
-          <div className="row rule"><dt>Owed this period</dt><dd>{fmtPkr(result.ledger.transferablePkr)}</dd></div>
+          <div className="row"><dt>Money earned</dt><dd>{fmtUsd(result.totals.earnedUsd)}</dd></div>
+          <div className="row"><dt>The team's share</dt><dd>{fmtPkr(result.totals.freelancerPkr)}</dd></div>
+          <div className="row"><dt>The company's share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
+          <div className="row rule"><dt>Total to pay out</dt><dd>{fmtPkr(result.ledger.transferablePkr)}</dd></div>
+          {result.ledger.directPkr > 0 && (
+            <div className="row"><dt>Went straight to the company</dt><dd>−{fmtPkr(result.ledger.directPkr)}</dd></div>
+          )}
           {result.ledger.localWagesPkr > 0 && (
-            <div className="row"><dt>Wages paid here</dt><dd>−{fmtPkr(result.ledger.localWagesPkr)}</dd></div>
+            <div className="row"><dt>You paid it yourself</dt><dd>−{fmtPkr(result.ledger.localWagesPkr)}</dd></div>
           )}
           <div className={`row final${result.ledger.remainingPkr < 0 ? ' negative' : ''}`}>
-            <dt>Still to remit</dt><dd>{fmtPkr(result.ledger.remainingPkr)}</dd>
+            <dt>Left to send</dt><dd>{fmtPkr(result.ledger.remainingPkr)}</dd>
           </div>
         </dl>
       </section>
 
       <section className="panel">
         <div className="panel-head">
-          <h2>Collection</h2>
-          <span className="hint">{received.length} of {result.accounts.length} received</span>
+          <h2>Who has paid us</h2>
+          <span className="hint">{received.length} of {result.accounts.length} clients</span>
         </div>
         {outstanding.length > 0 ? (
           <>
             <p className="collect-lead">
-              <b>{fmtUsd(outstandingUsd)}</b> still to come in, across {outstanding.length}{' '}
-              {outstanding.length === 1 ? 'account' : 'accounts'}.
+              <b>{fmtUsd(outstandingUsd)}</b> has not come in yet, from {outstanding.length}{' '}
+              {outstanding.length === 1 ? 'client' : 'clients'}.
             </p>
             <ul className="chips">
               {outstanding.map((a) => (
@@ -91,21 +94,21 @@ export default function Overview({ periods, period, result, onPick }: {
             </ul>
           </>
         ) : (
-          <p className="collect-lead">Everything invoiced this period has been received.</p>
+          <p className="collect-lead">Every client has paid this month.</p>
         )}
       </section>
 
       <section className="panel span-2">
         <div className="panel-head">
-          <h2>Who is owed what</h2>
-          <span className="hint">this period, in PKR</span>
+          <h2>What each person is owed</h2>
+          <span className="hint">this month, in PKR</span>
         </div>
         <ul className="paybars">
           {paid.map((s) => (
             <li key={s.staff.id}>
               <span className="pay-name">
                 {s.staff.name}
-                {s.staff.retained && <span className="tag-inline">kept local</span>}
+                {s.staff.retained && <span className="tag-inline">you pay them</span>}
               </span>
               <span className="pay-track">
                 <span className="pay-fill" style={{ width: `${Math.max(2, (s.payPkr / topPay) * 100)}%` }} />
@@ -113,7 +116,7 @@ export default function Overview({ periods, period, result, onPick }: {
               <span className="pay-fig mono">{fmtPkr(s.payPkr)}</span>
             </li>
           ))}
-          {!paid.length && <li className="empty">Nobody assigned a share yet.</li>}
+          {!paid.length && <li className="empty">Nobody has a share yet.</li>}
         </ul>
       </section>
     </div>
@@ -128,7 +131,7 @@ function Trend({ history, activeId, onPick }: {
   onPick: (id: string) => void;
 }) {
   const [hover, setHover] = React.useState<number | null>(null);
-  if (!history.length) return <p className="empty">No periods yet.</p>;
+  if (!history.length) return <p className="empty">No months yet.</p>;
 
   const W = 760;
   const H = 210;
@@ -156,7 +159,7 @@ function Trend({ history, activeId, onPick }: {
   return (
     <div className="chart-wrap">
       <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img"
-        aria-label="Earned in US dollars for each period">
+        aria-label="Money earned in US dollars, month by month">
         {ticks.map((t) => (
           <g key={t}>
             <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} className="grid" />

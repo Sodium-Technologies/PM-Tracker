@@ -37,7 +37,8 @@ share, a top-up. Each is labelled, recorded, and deducted the same way, so the
 ledger always balances:
 
 ```
-owed = still to remit + wages paid here + reimbursements + held back + transfers made
+owed = left to send + went straight to the company + you paid it yourself
+       + already spent there + kept back + already sent
 ```
 
 ## Working with periods
@@ -188,7 +189,37 @@ npm run e2e:auth
 It proves what the page does with each answer. What the *database* allows is
 `supabase/schema.sql`, and is enforced there whatever the page renders.
 
+## How time is read
+
+A month reads its time column one of two ways, set in the header:
+
+- **12.20 = 12 hours 20 minutes** — a timesheet's notation. `12.2030` is
+  12 h 20 m 30 s; `12` is 12 hours. Minutes above 59 are flagged rather than
+  quietly converted. This is the default for a month started in the app.
+- **12.20 = 12.2 hours** — plain decimal hours. Months imported from a
+  spreadsheet keep this, because a sheet that multiplied a rate by 12.2 meant
+  12.2 hours; reading those numbers the other way would change every figure that
+  has already been agreed.
+
+Switching a month between the two changes what it earns. That is the point of
+making it explicit.
+
+## Money that never reaches you
+
+Three different reasons an amount does not need sending, each recorded rather
+than quietly netted off:
+
+| On the page | What it means |
+|---|---|
+| Went straight to the company | the client paid the company's account directly, so neither the team's part nor the company's part passed through you |
+| You paid it yourself | wages you handed over here — a person marked *You pay them*, plus anything drawn on top |
+| Kept back this month | held rather than sent |
+
 ## Calculation reference
+
+Nothing is rounded while it is being worked out — figures keep full precision
+through the whole chain and are rounded once, where they are read. Rounding a
+number mid-calculation carries its error into every total built on it.
 
 Per account, in that account's own currency:
 

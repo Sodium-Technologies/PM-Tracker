@@ -100,7 +100,7 @@ const samplePeriod = {
     feePct: 0, adjustmentUsd: 0, freelancerPct: 70, status: 'Pending', notes: '',
   }],
   staff: [{ id: 's1', name: 'Naveed', shares: { a1: 1 }, adjustmentPkr: 0, retained: false, notes: '' }],
-  reimbursements: [], otherPayables: [], withheld: [], transfers: [],
+  reimbursements: [], otherPayables: [], withheld: [], localWages: [], transfers: [], timeFormat: 'decimal',
 };
 
 // 1. signed out
@@ -147,16 +147,16 @@ const samplePeriod = {
 {
   const { page, ctx, errors } = await open({ email: 'partner@company.com', role: 'viewer', periods: [samplePeriod] });
   ok('viewer sees the books', (await page.locator('.figure').count()) > 0);
-  ok('viewer sees the shared period', (await page.locator('.period').innerText()).includes('September 2026'));
-  ok('viewer is labelled view only', (await page.locator('.role').innerText()).trim() === 'View only');
-  ok('viewer gets no New period button', (await page.getByRole('button', { name: 'New period' }).count()) === 0);
-  ok('viewer gets no Import button', (await page.getByRole('button', { name: /Import sheet/ }).count()) === 0);
+  ok('viewer sees the shared period', (await page.locator('.period-name').inputValue()) === 'September 2026');
+  ok('viewer is labelled view only', (await page.locator('.role').innerText()).trim() === 'Can look');
+  ok('viewer gets no New period button', (await page.getByRole('button', { name: 'Start a new month' }).count()) === 0);
+  ok('viewer gets no Import button', (await page.getByRole('button', { name: /Load a sheet/ }).count()) === 0);
   ok('viewer gets no Delete button', (await page.getByRole('button', { name: 'Delete' }).count()) === 0);
-  ok('viewer gets no Access tab', (await page.getByRole('button', { name: 'Access' }).count()) === 0);
+  ok('viewer gets no way in to access', (await page.getByRole('button', { name: 'Who can open this' }).count()) === 0);
   ok('viewer sees the view-only badge', await page.locator('.readonly-badge').isVisible());
   ok('viewer lands on the summary', (await page.locator('.tab.active').innerText()) === 'Summary');
   ok('the summary charts the history', (await page.locator('.chart .bar').count()) > 0);
-  await page.getByRole('button', { name: 'Revenue' }).click();
+  await page.getByRole('button', { name: 'Money in' }).click();
   await page.waitForTimeout(300);
   const rate = page.locator('table tbody tr').first().locator('input').nth(2);
   ok('figure inputs are locked for a viewer', await rate.getAttribute('readonly') !== null);
@@ -164,7 +164,7 @@ const samplePeriod = {
   await rate.fill('999').catch(() => {});
   ok('a viewer cannot change a figure', (await rate.inputValue()) === before,
      `was ${before}, now ${await rate.inputValue()}`);
-  ok('viewer can still export', (await page.getByRole('button', { name: 'Export Excel' }).count()) === 1);
+  ok('viewer can still export', (await page.getByRole('button', { name: 'Download as Excel' }).count()) === 1);
   ok('no page errors for a viewer', errors.length === 0, errors.join('; '));
   await ctx.close();
 }
@@ -172,10 +172,10 @@ const samplePeriod = {
 // 4. editor
 {
   const { page, ctx } = await open({ email: 'editor@company.com', role: 'editor', periods: [samplePeriod] });
-  ok('editor is labelled can edit', (await page.locator('.role').innerText()).trim() === 'Can edit');
-  ok('editor gets New period', (await page.getByRole('button', { name: 'New period' }).count()) === 1);
-  ok('editor gets no Access tab', (await page.getByRole('button', { name: 'Access' }).count()) === 0);
-  await page.getByRole('button', { name: 'Revenue' }).click();
+  ok('editor is labelled can edit', (await page.locator('.role').innerText()).trim() === 'Can change');
+  ok('editor gets New period', (await page.getByRole('button', { name: 'Start a new month' }).count()) === 1);
+  ok('editor gets no way in to access', (await page.getByRole('button', { name: 'Who can open this' }).count()) === 0);
+  await page.getByRole('button', { name: 'Money in' }).click();
   await page.waitForTimeout(300);
   const rate = page.locator('table tbody tr').first().locator('input').nth(2);
   ok('figure inputs are editable for an editor', await rate.getAttribute('readonly') === null);
@@ -185,9 +185,9 @@ const samplePeriod = {
 // 5. super admin
 {
   const { page, ctx, errors } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod] });
-  ok('administrator is labelled administrator', (await page.locator('.role').innerText()).trim() === 'Administrator');
-  ok('administrator gets the Access tab', (await page.getByRole('button', { name: 'Access' }).count()) === 1);
-  await page.getByRole('button', { name: 'Access' }).click();
+  ok('administrator is labelled administrator', (await page.locator('.role').innerText()).trim() === 'Runs it');
+  ok('administrator gets the access panel', (await page.getByRole('button', { name: 'Who can open this' }).count()) === 1);
+  await page.getByRole('button', { name: 'Who can open this' }).click();
   await page.waitForTimeout(400);
   ok('access tab offers to add someone', await page.locator('#grant-email').isVisible());
   ok('access tab lists the three levels',
