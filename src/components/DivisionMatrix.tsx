@@ -1,14 +1,18 @@
 import type { Period } from '../lib/types';
-import { fmtPkr, round2, type PeriodResult } from '../lib/calc';
+import { fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
 import { EditOnly, NumberInput, TextInput } from './Fields';
 import { newStaff } from '../lib/state';
+import { useCanEdit } from '../lib/access';
+import { exportPayoutSheet } from '../lib/xlsx';
 
 /** Shares are stored as fractions (0.35) and edited as percentages (35). */
-export default function DivisionMatrix({ period, result, update }: {
+export default function DivisionMatrix({ period, result, update, onApplyPaidHereEverywhere }: {
   period: Period;
   result: PeriodResult;
   update: (fn: (p: Period) => void) => void;
+  onApplyPaidHereEverywhere: () => void;
 }) {
+  const canEdit = useCanEdit();
   const setShare = (staffId: string, accountId: string, pct: number) =>
     update((d) => {
       const s = d.staff.find((x) => x.id === staffId);
@@ -28,20 +32,29 @@ export default function DivisionMatrix({ period, result, update }: {
     <section className="panel">
       <div className="panel-head">
         <h2>
-          Who gets what <span className="hint">how each client's team money is split, in %</span>
+          Payroll <span className="hint">what each person earns from each client, in %</span>
         </h2>
-        <EditOnly>
-          <button className="btn" onClick={() => update((d) => d.staff.push(newStaff()))}>
-            Add a person
-          </button>
-        </EditOnly>
+        <div className="head-actions">
+          <EditOnly>
+            {result.staff.some((s) => s.staff.retained) && (
+              <button className="btn" title="Use these same marks in every month"
+                onClick={onApplyPaidHereEverywhere}>Use in every month</button>
+            )}
+            <button className="btn" onClick={() => update((d) => d.staff.push(newStaff()))}>
+              Add a person
+            </button>
+          </EditOnly>
+          <button className="btn" onClick={() => exportPayoutSheet(period)}>Download this list</button>
+        </div>
       </div>
       <div className="scroll">
         <table>
           <thead>
             <tr>
               <th>Person</th>
+              <th className="fig">Change by hand</th>
               <th className="fig">They get</th>
+              <th title="You hand this person their pay yourself, so it does not need sending">You pay them</th>
               {result.accounts.map((a) => (
                 <th key={a.account.id} className="fig">
                   <div>{a.account.name}</div>
@@ -61,7 +74,22 @@ export default function DivisionMatrix({ period, result, update }: {
                     const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.name = v;
                   })} />
                 </td>
-                <td className="fig mono total">{fmtPkr(s.payPkr)}</td>
+                <td className="fig">
+                  <NumberInput value={s.staff.adjustmentPkr} width={78}
+                    onChange={(v) => update((d) => {
+                      const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.adjustmentPkr = v;
+                    })} />
+                </td>
+                <td className="fig mono total" title={fmtUsd(s.payUsd)}>{fmtPkr(s.payPkr)}</td>
+                <td className="mid">
+                  <label className="check">
+                    <input type="checkbox" checked={s.staff.retained} disabled={!canEdit}
+                      aria-label={`You pay ${s.staff.name} yourself`}
+                      onChange={(e) => update((d) => {
+                        const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.retained = e.target.checked;
+                      })} />
+                  </label>
+                </td>
                 {result.accounts.map((a) => {
                   const share = s.staff.shares[a.account.id] || 0;
                   return (
@@ -84,13 +112,15 @@ export default function DivisionMatrix({ period, result, update }: {
               </tr>
             ))}
             {!period.staff.length && (
-              <tr><td colSpan={result.accounts.length + 3} className="empty">Nobody added yet.</td></tr>
+              <tr><td colSpan={result.accounts.length + 5} className="empty">Nobody added yet.</td></tr>
             )}
           </tbody>
           <tfoot>
             <tr>
               <td>Shared out</td>
+              <td />
               <td className="fig mono">{fmtPkr(result.totals.staffPayPkr)}</td>
+              <td />
               {result.accounts.map((a) => {
                 const pct = round2(a.allocated * 100);
                 const ok = pct === 100 || a.earnedUsd === 0;

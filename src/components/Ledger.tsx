@@ -1,93 +1,19 @@
 import type { LineItem, Period } from '../lib/types';
-import { fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
+import { fmtPkr, round2, type PeriodResult } from '../lib/calc';
 import { EditOnly, NumberInput, TextInput } from './Fields';
-import { uid } from '../lib/state';
-import { exportPayoutSheet } from '../lib/xlsx';
 import { useCanEdit } from '../lib/access';
+import { uid } from '../lib/state';
 
 type Update = (fn: (p: Period) => void) => void;
 
-export default function Ledger({ period, result, update, onApplyPaidHereEverywhere }: {
+export default function Ledger({ period, result, update }: {
   period: Period; result: PeriodResult; update: Update;
-  onApplyPaidHereEverywhere: () => void;
 }) {
   const canEdit = useCanEdit();
   const L = result.ledger;
-  const accountName = (id: string) => period.accounts.find((a) => a.id === id)?.name ?? '';
 
   return (
     <div className="cols">
-      <section className="panel">
-        <div className="panel-head">
-          <h2>What each person is owed <span className="hint">this month</span></h2>
-          <div className="head-actions">
-            {canEdit && result.staff.some((s) => s.staff.retained) && (
-              <button className="btn" title="Use these same marks in every month"
-                onClick={onApplyPaidHereEverywhere}>Use in every month</button>
-            )}
-            <button className="btn" onClick={() => exportPayoutSheet(period)}>Download this list</button>
-          </div>
-        </div>
-        <div className="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th className="fig">From their shares</th>
-                <th className="fig">Change by hand</th>
-                <th className="fig">Total pay</th>
-                <th className="fig">In USD</th>
-                <th title="You hand this person their pay yourself, so it does not need sending">You pay them</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.staff.map((s) => (
-                <tr key={s.staff.id}>
-                  <td>
-                    {s.staff.name}
-                    <span className="sub">
-                      {Object.entries(s.byAccount)
-                        .map(([id, v]) => `${accountName(id)} ${Math.round(v).toLocaleString()}`)
-                        .join(' · ') || 'no share of any client yet'}
-                    </span>
-                  </td>
-                  <td className="fig mono">{fmtPkr(s.sharePkr)}</td>
-                  <td className="fig">
-                    <NumberInput value={s.staff.adjustmentPkr} width={78}
-                      onChange={(v) => update((d) => {
-                        const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.adjustmentPkr = v;
-                      })} />
-                  </td>
-                  <td className="fig mono total">{fmtPkr(s.payPkr)}</td>
-                  <td className="fig mono">{fmtUsd(s.payUsd)}</td>
-                  <td>
-                    <label className="check">
-                      <input type="checkbox" checked={s.staff.retained}
-                        aria-label={`${s.staff.name} kept local`}
-                        disabled={!canEdit}
-                        onChange={(e) => update((d) => {
-                          const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.retained = e.target.checked;
-                        })} />
-                    </label>
-                  </td>
-                </tr>
-              ))}
-              {!result.staff.length && <tr><td colSpan={6} className="empty">Nobody added yet.</td></tr>}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>{result.staff.length} people</td>
-                <td className="fig mono">{fmtPkr(round2(result.totals.staffPayPkr - sumAdj(period)))}</td>
-                <td className="fig mono">{fmtPkr(sumAdj(period))}</td>
-                <td className="fig mono total">{fmtPkr(result.totals.staffPayPkr)}</td>
-                <td className="fig mono">{fmtUsd(round2(result.totals.staffPayPkr / (period.usdToPkr || 1)))}</td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </section>
-
       <div className="stack">
         <section className="panel wages">
           <div className="panel-head">
@@ -160,6 +86,9 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
           </dl>
         </section>
 
+      </div>
+
+      <div className="stack">
         <LineItems
           title="Money already spent there"
           hint="in USD — subscriptions, advances"
@@ -234,8 +163,6 @@ export default function Ledger({ period, result, update, onApplyPaidHereEverywhe
     </div>
   );
 }
-
-const sumAdj = (p: Period) => round2(p.staff.reduce((a, s) => a + (Number(s.adjustmentPkr) || 0), 0));
 
 function LineItems({ title, hint, rows, usd, period, onAdd, onLabel, onAmount, onRemove }: {
   title: string;

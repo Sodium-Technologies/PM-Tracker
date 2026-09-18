@@ -351,9 +351,9 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <nav className="tabs">
           {([
             ['overview', 'Summary'],
-            ['revenue', 'Money in'],
-            ['division', 'Who gets what'],
-            ['payouts', 'Paying people'],
+            ['revenue', 'Revenue'],
+            ['division', 'Payrolls'],
+            ['payouts', 'Distributions'],
           ] as const).map(([id, label]) => (
             <button key={id} className={`tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id as Tab)}>
               {label}
@@ -373,11 +373,11 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           {tab === 'revenue' && (
             <AccountsTable result={result} update={update} timeFormat={period.timeFormat} />
           )}
-          {tab === 'division' && <DivisionMatrix period={period} result={result} update={update} />}
-          {tab === 'payouts' && (
-            <Ledger period={period} result={result} update={update}
+          {tab === 'division' && (
+            <DivisionMatrix period={period} result={result} update={update}
               onApplyPaidHereEverywhere={applyPaidHereEverywhere} />
           )}
+          {tab === 'payouts' && <Ledger period={period} result={result} update={update} />}
           {tab === 'access' && auth.isSuperAdmin && (
             <People me={auth.email} onChanged={auth.refreshRole} />
           )}

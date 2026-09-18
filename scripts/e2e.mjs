@@ -71,7 +71,7 @@ const summary = XLSX.utils.sheet_to_json(wb.Sheets['Summary'], { header: 1 });
 ok('Excel summary lists every period', summary.length === periodCount + 1, `${summary.length - 1} rows`);
 
 // 3. payouts export
-await page.getByRole('button', { name: 'Paying people' }).click();
+await page.getByRole('button', { name: 'Payrolls' }).click();
 await page.waitForTimeout(300);
 const [dl2] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download this list' }).click()]);
 const pPath = join(OUT, 'payouts.xlsx'); await dl2.saveAs(pPath);
@@ -89,7 +89,7 @@ const backup = JSON.parse(readFileSync(jPath, 'utf8'));
 ok('backup downloads valid JSON', backup.periods.length === periodCount, `${backup.periods.length} periods`);
 
 // 5. editing recomputes
-await page.getByRole('button', { name: 'Money in' }).click();
+await page.getByRole('button', { name: 'Revenue' }).click();
 await page.waitForTimeout(200);
 const before = await page.locator('.figure').first().innerText();
 await page.locator('#usd-pkr').fill('280');
@@ -125,14 +125,19 @@ ok('state survives reload', (await page.locator('.period').count()) === periodCo
 // 9. wages settled locally
 {
   await page.getByRole('button', { name: new RegExp(active.replace(/\s*\d{4}$/, '').replace(/^PM - /, '')) }).first().click();
-  await page.getByRole('button', { name: 'Paying people' }).click();
+  await page.getByRole('button', { name: 'Distributions' }).click();
   await page.waitForTimeout(400);
 
   const remitLine = () => page.locator('.settle .row.final dd').first().innerText();
   const before = await remitLine();
 
-  const firstRetain = page.locator('input[type=checkbox]').first();
-  await firstRetain.check();
+  // the "you pay them" flags live on the payroll table now
+  await page.getByRole('button', { name: 'Payrolls' }).click();
+  await page.waitForTimeout(300);
+  await page.locator('input[type=checkbox]').first().check();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Distributions' }).click();
+  await page.waitForTimeout(300);
   await page.waitForTimeout(400);
   const after = await remitLine();
   ok('marking someone paid here lowers what must be remitted', before !== after, `${before} → ${after}`);
@@ -147,6 +152,8 @@ ok('state survives reload', (await page.locator('.period').count()) === periodCo
   await page.waitForTimeout(500);
   const afterDraw = await remitLine();
   ok('a drawn wage lowers it further', afterDraw !== after, `${after} → ${afterDraw}`);
+  await page.getByRole('button', { name: 'Payrolls' }).click();
+  await page.waitForTimeout(300);
   ok('apply-to-all is offered once somebody is marked',
      (await page.getByRole('button', { name: 'Use in every month' }).count()) === 1);
   await page.getByRole('button', { name: 'Use in every month' }).click();
@@ -157,17 +164,17 @@ ok('state survives reload', (await page.locator('.period').count()) === periodCo
 
 // 10. division allocation display
 await page.getByRole('button', { name: new RegExp(active.replace(/\s*\d{4}$/, '').replace(/^PM - /, '')) }).first().click();
-await page.getByRole('button', { name: 'Who gets what' }).click();
+await page.getByRole('button', { name: 'Payrolls' }).click();
 await page.waitForTimeout(300);
 const allocs = await page.locator('tfoot .alloc-ok, tfoot .alloc-off').allInnerTexts();
 ok('every account fully allocated', allocs.length > 0 && allocs.every(a => a === '100%'), allocs.join(' '));
 
-await page.getByRole('button', { name: 'Money in' }).click();
+await page.getByRole('button', { name: 'Revenue' }).click();
 await page.screenshot({ path: join(OUT, 'revenue.png'), fullPage: false });
-await page.getByRole('button', { name: 'Paying people' }).click();
+await page.getByRole('button', { name: 'Distributions' }).click();
 await page.screenshot({ path: join(OUT, 'payouts.png'), fullPage: false });
 await page.emulateMedia({ colorScheme: 'dark' });
-await page.getByRole('button', { name: 'Who gets what' }).click();
+await page.getByRole('button', { name: 'Payrolls' }).click();
 await page.screenshot({ path: join(OUT, 'division-dark.png'), fullPage: false });
 
 console.log(errs.length ? '\nJS ERRORS:\n' + errs.join('\n') : '\nNo JS errors.');
