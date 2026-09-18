@@ -192,9 +192,20 @@ export function computePeriod(period: Period): PeriodResult {
   };
 }
 
+/** A figure that rounds away to nothing is nothing: without this, a balance of
+ *  −0.3 PKR prints as "PKR -0", and −0.004 USD as "-$0.00". Nobody is owed a
+ *  negative zero. `digits` is what the formatter will show. */
+const noNegativeZero = (n: number, digits: number) => {
+  const scale = 10 ** digits;
+  return Math.round(n * scale) === 0 ? 0 : n;
+};
+
 export const fmtUsd = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+  noNegativeZero(n, 2).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 export const fmtPkr = (n: number) =>
-  'PKR ' + Math.round(n).toLocaleString('en-US');
+  'PKR ' + Math.round(noNegativeZero(n, 0)).toLocaleString('en-US');
+/** True only when the figure reads negative once printed, so a balance that
+ *  shows as PKR 0 is never styled as an overdraft. */
+export const negativePkr = (n: number) => Math.round(noNegativeZero(n, 0)) < 0;
 export const fmtNum = (n: number) =>
-  n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  noNegativeZero(n, 2).toLocaleString('en-US', { maximumFractionDigits: 2 });

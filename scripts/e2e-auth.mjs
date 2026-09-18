@@ -156,7 +156,9 @@ const samplePeriod = {
   ok('viewer sees the view-only badge', await page.locator('.readonly-badge').isVisible());
   ok('viewer lands on the summary', (await page.locator('.tab.active').innerText()) === 'Summary');
   ok('the summary stays on this month only', (await page.locator('.chart').count()) === 0);
-  ok('the analysis has its own tab', (await page.getByRole('button', { name: 'Dashboard' }).count()) === 1);
+  ok('the analysis sits outside the months', (await page.locator('.rail-nav .rail-link').innerText()) === 'Dashboard');
+  ok('the month tabs carry no analysis',
+    (await page.locator('.tab').allInnerTexts()).join('|') === 'Summary|Revenue|Payrolls|Distributions');
   await page.getByRole('button', { name: 'Revenue' }).click();
   await page.waitForTimeout(300);
   const rate = page.locator('table tbody tr').first().locator('input').nth(2);

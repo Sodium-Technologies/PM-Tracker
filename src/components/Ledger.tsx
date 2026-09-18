@@ -1,5 +1,5 @@
 import type { LineItem, Period } from '../lib/types';
-import { fmtPkr, round2, type PeriodResult } from '../lib/calc';
+import { fmtPkr, negativePkr, round2, type PeriodResult } from '../lib/calc';
 import { EditOnly, NumberInput, TextInput } from './Fields';
 import { useCanEdit } from '../lib/access';
 import { uid } from '../lib/state';
@@ -80,7 +80,7 @@ export default function Ledger({ period, result, update }: {
             <div className="row"><dt>You paid it yourself</dt><dd>−{fmtPkr(L.localWagesPkr)}</dd></div>
             <div className="row"><dt>Kept back this month</dt><dd>−{fmtPkr(L.withheldPkr)}</dd></div>
             <div className="row"><dt>Already sent</dt><dd>−{fmtPkr(L.transfersPkr)}</dd></div>
-            <div className={`row final${L.remainingPkr < 0 ? ' negative' : ''}`}>
+            <div className={`row final${negativePkr(L.remainingPkr) ? ' negative' : ''}`}>
               <dt>Left to send</dt><dd>{fmtPkr(L.remainingPkr)}</dd>
             </div>
           </dl>

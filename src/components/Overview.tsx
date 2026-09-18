@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Period } from '../lib/types';
-import { computePeriod, fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
+import { computePeriod, fmtPkr, fmtUsd, negativePkr, round2, type PeriodResult } from '../lib/calc';
 
 /** This month alone: what came in, what is still outstanding, and who is owed
  *  what. Anything that compares months lives on the Dashboard — the one
@@ -54,7 +54,7 @@ export default function Overview({ periods, period, result }: {
           {result.ledger.localWagesPkr > 0 && (
             <div className="row"><dt>You paid it yourself</dt><dd>−{fmtPkr(result.ledger.localWagesPkr)}</dd></div>
           )}
-          <div className={`row final${result.ledger.remainingPkr < 0 ? ' negative' : ''}`}>
+          <div className={`row final${negativePkr(result.ledger.remainingPkr) ? ' negative' : ''}`}>
             <dt>Left to send</dt><dd>{fmtPkr(result.ledger.remainingPkr)}</dd>
           </div>
         </dl>

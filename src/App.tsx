@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AppState, Period } from './lib/types';
-import { computePeriod, fmtPkr, fmtUsd } from './lib/calc';
+import { computePeriod, fmtPkr, fmtUsd, negativePkr } from './lib/calc';
 import {
   defaultLabel, emptyState, loadState, newPeriod, normalize, rollForward, saveState, uid,
 } from './lib/state';
@@ -19,7 +19,10 @@ import SignIn from './components/SignIn';
 import { NumberInput } from './components/Fields';
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
-type Tab = 'overview' | 'dashboard' | 'revenue' | 'division' | 'payouts' | 'access';
+/** The app has two places to stand: the whole business (Dashboard, and who can
+ *  open the books), or one month. Tabs belong to a month and never leave it. */
+type View = 'dashboard' | 'month' | 'access';
+type Tab = 'overview' | 'revenue' | 'division' | 'payouts';
 
 export default function App() {
   const auth = useAuth();
@@ -45,9 +48,14 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
     return !!saved?.periods?.some((p) => p.accounts.length || p.staff.length);
   });
   const [syncing, setSyncing] = React.useState(cloudEnabled);
-  // Opens on the summary: most visits are to find out where things stand, not
-  // to type into the ledger.
+  // Opens on the open month's summary: most visits are to find out where a month
+  // stands, not to read the history or type into the ledger.
+  const [view, setView] = React.useState<View>('month');
   const [tab, setTab] = React.useState<Tab>('overview');
+  const openMonth = (id: string) => {
+    setState((s) => ({ ...s, activePeriodId: id }));
+    setView('month');
+  };
   const [toast, setToast] = React.useState('');
   const fileRef = React.useRef<HTMLInputElement>(null);
 
@@ -241,6 +249,11 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           <span>payroll ledger</span>
         </div>
 
+        <nav className="rail-nav">
+          <button className={`rail-link${view === 'dashboard' ? ' active' : ''}`}
+            onClick={() => setView('dashboard')}>Dashboard</button>
+        </nav>
+
         <div className="rail-label">Months</div>
         <nav className="period-list">
           {state.periods.map((p, i) => {
@@ -251,8 +264,8 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
               <React.Fragment key={p.id}>
                 {year && year !== previousYear && <div className="year-mark">{year}</div>}
                 <button
-                  className={`period${p.id === period.id ? ' active' : ''}`}
-                  onClick={() => setState((s) => ({ ...s, activePeriodId: p.id }))}
+                  className={`period${view === 'month' && p.id === period.id ? ' active' : ''}`}
+                  onClick={() => openMonth(p.id)}
                 >
                   <span>{p.label.replace(/\s*\d{4}$/, '').replace(/^PM - /, '')}</span>
                   <span className="period-sum">{r.totals.earnedUsd ? fmtUsd(r.totals.earnedUsd) : '—'}</span>
@@ -272,8 +285,8 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           <button className="btn wide" onClick={exportExcel}>Download as Excel</button>
           <button className="btn wide" onClick={backup}>Save a backup</button>
           {auth.isSuperAdmin && (
-            <button className={`btn wide${tab === 'access' ? ' primary' : ''}`}
-              onClick={() => setTab(tab === 'access' ? 'overview' : 'access')}>
+            <button className={`btn wide${view === 'access' ? ' primary' : ''}`}
+              onClick={() => setView(view === 'access' ? 'month' : 'access')}>
               Who can open this
             </button>
           )}
@@ -294,35 +307,6 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
       </aside>
 
       <main className="main">
-        <header className="head">
-          <input className="period-name" value={period.label} aria-label="Period name"
-            onChange={(e) => update((d) => { d.label = e.target.value; })} />
-          <div className="rate-field">
-            <label htmlFor="usd-pkr">$1 =</label>
-            <NumberInput id="usd-pkr" value={period.usdToPkr} width={62}
-              onChange={(v) => update((d) => { d.usdToPkr = v; })} />
-            <span className="tag">PKR</span>
-          </div>
-          <label className="rate-field" htmlFor="time-format">
-            <span>Time written as</span>
-            <select id="time-format" className="cell-input" value={period.timeFormat}
-              disabled={!canEdit}
-              onChange={(e) => update((d) => { d.timeFormat = e.target.value as Period['timeFormat']; })}>
-              <option value="hm">12.20 = 12 hours 20 minutes</option>
-              <option value="decimal">12.20 = 12.2 hours</option>
-            </select>
-          </label>
-          <div className="spacer" />
-          {canEdit ? (
-            <>
-              <button className="btn" onClick={duplicatePeriod}>Duplicate</button>
-              <button className="btn" onClick={deletePeriod} disabled={state.periods.length === 1}>Delete</button>
-            </>
-          ) : (
-            <span className="readonly-badge">You can look, not change</span>
-          )}
-        </header>
-
         {!cloudEnabled && (
           <div className="mode-banner">
             <b>Local mode — no sign-in, nothing shared.</b> Everything here lives in this
@@ -332,63 +316,107 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           </div>
         )}
 
-        <dl className="figures">
-          <Figure label="Money earned" value={fmtUsd(result.totals.earnedUsd)} sub={fmtPkr(result.totals.earnedPkr)} />
-          <Figure label="The team's share" value={fmtPkr(result.totals.freelancerPkr)} sub={fmtUsd(result.totals.freelancerUsd)} />
-          <Figure label="The company's share" value={fmtPkr(result.totals.companyPkr)} sub={fmtUsd(result.totals.companyUsd)} />
-          <Figure label="Total to pay out" value={fmtPkr(result.ledger.transferablePkr)}
-            sub={`${period.staff.length} people · ${period.accounts.length} clients`} />
-          <Figure label="Left to send" value={fmtPkr(result.ledger.remainingPkr)}
-            sub={`of ${fmtPkr(result.ledger.transferablePkr)}`}
-            lead negative={result.ledger.remainingPkr < 0} />
-        </dl>
-
-        {result.warnings.length > 0 && (
-          <ul className="notices">
-            {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
-          </ul>
+        {view === 'dashboard' && (
+          <>
+            <header className="head">
+              <h1 className="view-name">Dashboard</h1>
+              <span className="hint">every month together — nothing here belongs to one month</span>
+              <div className="spacer" />
+              <button className="btn" onClick={() => setView('month')}>Open {period.label}</button>
+            </header>
+            <div className="sheet">
+              <Analytics periods={state.periods} onPick={openMonth} />
+            </div>
+          </>
         )}
 
-        <nav className="tabs">
-          {([
-            ['overview', 'Summary'],
-            ['dashboard', 'Dashboard'],
-            ['revenue', 'Revenue'],
-            ['division', 'Payrolls'],
-            ['payouts', 'Distributions'],
-          ] as const).map(([id, label]) => (
-            <button key={id} className={`tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id as Tab)}>
-              {label}
-            </button>
-          ))}
-        </nav>
+        {view === 'access' && auth.isSuperAdmin && (
+          <>
+            <header className="head">
+              <h1 className="view-name">Who can open this</h1>
+              <div className="spacer" />
+              <button className="btn" onClick={() => setView('month')}>Back to {period.label}</button>
+            </header>
+            <div className="sheet">
+              <People me={auth.email} onChanged={auth.refreshRole} />
+            </div>
+          </>
+        )}
 
-        <div className="sheet">
-          {tab === 'overview' && (
-            <Overview
-              periods={state.periods}
-              period={period}
-              result={result}
-            />
-          )}
-          {tab === 'dashboard' && (
-            <Analytics
-              periods={state.periods}
-              onPick={(id) => { setState((s) => ({ ...s, activePeriodId: id })); setTab('overview'); }}
-            />
-          )}
-          {tab === 'revenue' && (
-            <AccountsTable result={result} update={update} timeFormat={period.timeFormat} />
-          )}
-          {tab === 'division' && (
-            <DivisionMatrix period={period} result={result} update={update}
-              onApplyPaidHereEverywhere={applyPaidHereEverywhere} />
-          )}
-          {tab === 'payouts' && <Ledger period={period} result={result} update={update} />}
-          {tab === 'access' && auth.isSuperAdmin && (
-            <People me={auth.email} onChanged={auth.refreshRole} />
-          )}
-        </div>
+        {view === 'month' && (
+          <>
+            <header className="head">
+              <input className="period-name" value={period.label} aria-label="Period name"
+                onChange={(e) => update((d) => { d.label = e.target.value; })} />
+              <div className="rate-field">
+                <label htmlFor="usd-pkr">$1 =</label>
+                <NumberInput id="usd-pkr" value={period.usdToPkr} width={62}
+                  onChange={(v) => update((d) => { d.usdToPkr = v; })} />
+                <span className="tag">PKR</span>
+              </div>
+              <label className="rate-field" htmlFor="time-format">
+                <span>Time written as</span>
+                <select id="time-format" className="cell-input" value={period.timeFormat}
+                  disabled={!canEdit}
+                  onChange={(e) => update((d) => { d.timeFormat = e.target.value as Period['timeFormat']; })}>
+                  <option value="hm">12.20 = 12 hours 20 minutes</option>
+                  <option value="decimal">12.20 = 12.2 hours</option>
+                </select>
+              </label>
+              <div className="spacer" />
+              {canEdit ? (
+                <>
+                  <button className="btn" onClick={duplicatePeriod}>Duplicate</button>
+                  <button className="btn" onClick={deletePeriod} disabled={state.periods.length === 1}>Delete</button>
+                </>
+              ) : (
+                <span className="readonly-badge">You can look, not change</span>
+              )}
+            </header>
+
+            <dl className="figures">
+              <Figure label="Money earned" value={fmtUsd(result.totals.earnedUsd)} sub={fmtPkr(result.totals.earnedPkr)} />
+              <Figure label="The team's share" value={fmtPkr(result.totals.freelancerPkr)} sub={fmtUsd(result.totals.freelancerUsd)} />
+              <Figure label="The company's share" value={fmtPkr(result.totals.companyPkr)} sub={fmtUsd(result.totals.companyUsd)} />
+              <Figure label="Total to pay out" value={fmtPkr(result.ledger.transferablePkr)}
+                sub={`${period.staff.length} people · ${period.accounts.length} clients`} />
+              <Figure label="Left to send" value={fmtPkr(result.ledger.remainingPkr)}
+                sub={`of ${fmtPkr(result.ledger.transferablePkr)}`}
+                lead negative={negativePkr(result.ledger.remainingPkr)} />
+            </dl>
+
+            {result.warnings.length > 0 && (
+              <ul className="notices">
+                {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            )}
+
+            <nav className="tabs">
+              {([
+                ['overview', 'Summary'],
+                ['revenue', 'Revenue'],
+                ['division', 'Payrolls'],
+                ['payouts', 'Distributions'],
+              ] as const).map(([id, label]) => (
+                <button key={id} className={`tab${tab === id ? ' active' : ''}`} onClick={() => setTab(id as Tab)}>
+                  {label}
+                </button>
+              ))}
+            </nav>
+
+            <div className="sheet">
+              {tab === 'overview' && <Overview periods={state.periods} period={period} result={result} />}
+              {tab === 'revenue' && (
+                <AccountsTable result={result} update={update} timeFormat={period.timeFormat} />
+              )}
+              {tab === 'division' && (
+                <DivisionMatrix period={period} result={result} update={update}
+                  onApplyPaidHereEverywhere={applyPaidHereEverywhere} />
+              )}
+              {tab === 'payouts' && <Ledger period={period} result={result} update={update} />}
+            </div>
+          </>
+        )}
       </main>
 
       {toast && <div className="toast" role="status">{toast}</div>}
