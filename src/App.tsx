@@ -19,7 +19,7 @@ import SignIn from './components/SignIn';
 import { NumberInput } from './components/Fields';
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
-type Tab = 'overview' | 'analytics' | 'revenue' | 'division' | 'payouts' | 'access';
+type Tab = 'overview' | 'dashboard' | 'revenue' | 'division' | 'payouts' | 'access';
 
 export default function App() {
   const auth = useAuth();
@@ -352,7 +352,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <nav className="tabs">
           {([
             ['overview', 'Summary'],
-            ['analytics', 'Analytics'],
+            ['dashboard', 'Dashboard'],
             ['revenue', 'Revenue'],
             ['division', 'Payrolls'],
             ['payouts', 'Distributions'],
@@ -369,10 +369,9 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
               periods={state.periods}
               period={period}
               result={result}
-              onPick={(id) => setState((s) => ({ ...s, activePeriodId: id }))}
             />
           )}
-          {tab === 'analytics' && (
+          {tab === 'dashboard' && (
             <Analytics
               periods={state.periods}
               onPick={(id) => { setState((s) => ({ ...s, activePeriodId: id })); setTab('overview'); }}

@@ -155,7 +155,8 @@ const samplePeriod = {
   ok('viewer gets no way in to access', (await page.getByRole('button', { name: 'Who can open this' }).count()) === 0);
   ok('viewer sees the view-only badge', await page.locator('.readonly-badge').isVisible());
   ok('viewer lands on the summary', (await page.locator('.tab.active').innerText()) === 'Summary');
-  ok('the summary charts the history', (await page.locator('.chart .bar').count()) > 0);
+  ok('the summary stays on this month only', (await page.locator('.chart').count()) === 0);
+  ok('the analysis has its own tab', (await page.getByRole('button', { name: 'Dashboard' }).count()) === 1);
   await page.getByRole('button', { name: 'Revenue' }).click();
   await page.waitForTimeout(300);
   const rate = page.locator('table tbody tr').first().locator('input').nth(2);

@@ -2,22 +2,17 @@ import React from 'react';
 import type { Period } from '../lib/types';
 import { computePeriod, fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
 
-/** The page someone opens to find out where things stand, without reading a
- *  spreadsheet: what came in, what is still outstanding, who is owed what, and
- *  how this month compares with the ones before it. */
-export default function Overview({ periods, period, result, onPick }: {
+/** This month alone: what came in, what is still outstanding, and who is owed
+ *  what. Anything that compares months lives on the Dashboard — the one
+ *  exception is the single line saying how this month sits against the last. */
+export default function Overview({ periods, period, result }: {
   periods: Period[];
   period: Period;
   result: PeriodResult;
-  onPick: (id: string) => void;
 }) {
-  // Only real months belong on a time axis; a legacy summary tab would sit on it
-  // as a bar that means nothing. It stays in the period list either way.
-  const isMonth = (label: string) => /[A-Za-z]+\s+\d{4}/.test(label);
-  const history = React.useMemo(
-    () => periods
-      .filter((p) => isMonth(p.label))
-      .map((p) => ({ period: p, totals: computePeriod(p).totals })),
+  // Only to find the month before this one, for the single comparison line.
+  const months = React.useMemo(
+    () => periods.filter((p) => /[A-Za-z]+\s+\d{4}/.test(p.label)),
     [periods],
   );
 
@@ -30,28 +25,21 @@ export default function Overview({ periods, period, result, onPick }: {
   const paid = [...result.staff].sort((a, b) => b.payPkr - a.payPkr);
   const topPay = paid[0]?.payPkr || 1;
 
-  const at = history.findIndex((h) => h.period.id === period.id);
-  const previous = at > 0 ? history[at - 1] : undefined;
-  const change = previous?.totals.earnedUsd
-    ? round2(((result.totals.earnedUsd - previous.totals.earnedUsd) / previous.totals.earnedUsd) * 100)
+  const at = months.findIndex((p) => p.id === period.id);
+  const previous = at > 0 ? months[at - 1] : undefined;
+  const previousUsd = previous ? computePeriod(previous).totals.earnedUsd : 0;
+  const change = previousUsd
+    ? round2(((result.totals.earnedUsd - previousUsd) / previousUsd) * 100)
     : null;
 
   return (
     <div className="overview">
-      <section className="panel span-2">
-        <div className="panel-head">
-          <h2>Money earned each month <span className="hint">in USD, after fees</span></h2>
-          <span className="hint">click a bar to open that month</span>
-        </div>
-        <Trend history={history} activeId={period.id} onPick={onPick} />
-      </section>
-
       <section className="panel">
         <div className="panel-head">
           <h2>This month</h2>
           {change !== null && (
             <span className={`delta ${change >= 0 ? 'up' : 'down'}`}>
-              {change >= 0 ? '▲' : '▼'} {Math.abs(change)}% vs {previous?.period.label}
+              {change >= 0 ? '▲' : '▼'} {Math.abs(change)}% vs {previous?.label}
             </span>
           )}
         </div>
@@ -119,88 +107,6 @@ export default function Overview({ periods, period, result, onPick }: {
           {!paid.length && <li className="empty">Nobody has a share yet.</li>}
         </ul>
       </section>
-    </div>
-  );
-}
-
-/** One series, so no legend — the heading names it. Bars carry the hover and the
- *  click; the active period is the only one in full accent. */
-function Trend({ history, activeId, onPick }: {
-  history: { period: Period; totals: { earnedUsd: number; earnedPkr: number } }[];
-  activeId: string;
-  onPick: (id: string) => void;
-}) {
-  const [hover, setHover] = React.useState<number | null>(null);
-  if (!history.length) return <p className="empty">No months yet.</p>;
-
-  const W = 760;
-  const H = 210;
-  const padL = 54;
-  const padR = 12;
-  const padT = 14;
-  const padB = 34;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-
-  const max = Math.max(...history.map((h) => h.totals.earnedUsd), 1);
-  const ceiling = Math.ceil(max / 1000) * 1000 || 1000;
-  const band = plotW / history.length;
-  const barW = Math.max(6, Math.min(44, band - 10));
-  const y = (v: number) => padT + plotH - (v / ceiling) * plotH;
-
-  const ticks = [0, ceiling / 2, ceiling];
-  const shortLabel = (label: string) => {
-    const m = label.match(/([A-Za-z]+)\s+(\d{4})/);
-    return m ? `${m[1].slice(0, 3)} ${m[2].slice(2)}` : label.slice(0, 7);
-  };
-
-  const active = hover ?? history.findIndex((h) => h.period.id === activeId);
-
-  return (
-    <div className="chart-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img"
-        aria-label="Money earned in US dollars, month by month">
-        {ticks.map((t) => (
-          <g key={t}>
-            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} className="grid" />
-            <text x={padL - 8} y={y(t) + 4} className="axis" textAnchor="end">
-              ${Math.round(t / 1000)}k
-            </text>
-          </g>
-        ))}
-
-        {history.map((h, i) => {
-          const x = padL + i * band + (band - barW) / 2;
-          const top = y(h.totals.earnedUsd);
-          const isActive = h.period.id === activeId;
-          return (
-            <g key={h.period.id}
-              onMouseEnter={() => setHover(i)}
-              onMouseLeave={() => setHover(null)}
-              onClick={() => onPick(h.period.id)}
-              className="bar-group">
-              <rect x={padL + i * band} y={padT} width={band} height={plotH} className="bar-hit" />
-              <rect
-                x={x} y={top} width={barW} height={Math.max(2, padT + plotH - top)}
-                rx={4}
-                className={`bar${isActive ? ' active' : ''}${hover === i ? ' hover' : ''}`}
-              />
-              <text x={x + barW / 2} y={H - 12} className="axis" textAnchor="middle">
-                {shortLabel(h.period.label)}
-              </text>
-              <title>{`${h.period.label}: ${fmtUsd(h.totals.earnedUsd)}`}</title>
-            </g>
-          );
-        })}
-      </svg>
-
-      {active >= 0 && history[active] && (
-        <p className="chart-read">
-          <b>{history[active].period.label}</b>
-          <span className="mono">{fmtUsd(history[active].totals.earnedUsd)}</span>
-          <span className="mono muted">{fmtPkr(history[active].totals.earnedPkr)}</span>
-        </p>
-      )}
     </div>
   );
 }
