@@ -15,6 +15,8 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
   const [address, setAddress] = React.useState('');
   const [code, setCode] = React.useState('');
   const [link, setLink] = React.useState('');
+  const linkRef = React.useRef<HTMLInputElement>(null);
+  const codeRef = React.useRef<HTMLInputElement>(null);
   const [sent, setSent] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState(() => signInErrorFromUrl() ?? '');
@@ -36,26 +38,64 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
     else setSent(true);
   };
 
+  /** Read the box rather than trusting React's copy of it. An iOS paste that
+   *  does not fire a change event leaves the state empty while the field plainly
+   *  has a link in it — and then a disabled button does nothing at all, which is
+   *  the worst thing a sign-in screen can do. */
   const submitLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!link.trim()) return;
+    const typed = linkRef.current?.value ?? '';
+    const pasted = (typed || link).trim();
+    if (!pasted) {
+      setError('Paste the sign-in link from the email into the box first.');
+      return;
+    }
     setBusy(true);
     setError('');
-    const { error: err } = await signInWithLink(link);
-    setBusy(false);
-    if (err) setError(err);
+    try {
+      const { error: err } = await signInWithLink(pasted);
+      if (err) setError(err);
+    } catch (thrown) {
+      // Nothing gets to fail quietly here.
+      setError(`Could not use that link: ${(thrown as Error).message ?? String(thrown)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** iOS will hand over the clipboard on a tap, which saves the paste working at
+   *  all. It is offered as a shortcut, never as the only way in. */
+  const pasteFromClipboard = async () => {
+    setError('');
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) { setError('The clipboard is empty. Copy the link from the email first.'); return; }
+      setLink(text.trim());
+      if (linkRef.current) linkRef.current.value = text.trim();
+    } catch {
+      setError('This device would not share the clipboard. Long-press the box and choose Paste.');
+    }
   };
 
   const submitCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) return;
+    const typed = (codeRef.current?.value || code).trim();
+    if (!typed) {
+      setError('Type the six-digit code from the email first.');
+      return;
+    }
     setBusy(true);
     setError('');
-    const { error: err } = await signInWithCode(address, code);
-    setBusy(false);
-    // On success the session arrives through onAuthStateChange and this screen
-    // is replaced, so there is nothing to do here.
-    if (err) setError(err);
+    try {
+      // On success the session arrives through onAuthStateChange and this screen
+      // is replaced, so there is nothing to do here.
+      const { error: err } = await signInWithCode(address, typed);
+      if (err) setError(err);
+    } catch (thrown) {
+      setError(`Could not check that code: ${(thrown as Error).message ?? String(thrown)}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (configError) {
@@ -104,6 +144,7 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
               submit on anything malformed, and this screen explains the problem
               better than a tooltip does. */}
           <input
+            ref={linkRef}
             id="signin-link"
             type="text"
             inputMode="url"
@@ -114,9 +155,12 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
             placeholder="https://…"
             onChange={(e) => setLink(e.target.value)}
           />
-          <button className="btn primary" type="submit" disabled={busy || !link.trim()}>
-            {busy ? 'Checking…' : 'Sign in with this link'}
-          </button>
+          <div className="signin-row">
+            <button className="btn" type="button" onClick={pasteFromClipboard}>Paste</button>
+            <button className="btn primary wide" type="submit" disabled={busy}>
+              {busy ? 'Checking…' : 'Sign in with this link'}
+            </button>
+          </div>
         </form>
         <p className="signin-note">
           {installed
@@ -129,6 +173,7 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
           <form onSubmit={submitCode} className="signin-form">
             <label htmlFor="signin-code">Six-digit code</label>
             <input
+              ref={codeRef}
               id="signin-code"
               className="code-input"
               inputMode="numeric"
@@ -138,7 +183,7 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
               placeholder="123456"
               onChange={(e) => setCode(e.target.value)}
             />
-            <button className="btn primary" type="submit" disabled={busy || !code.trim()}>
+            <button className="btn primary" type="submit" disabled={busy}>
               {busy ? 'Checking…' : 'Sign in with code'}
             </button>
           </form>

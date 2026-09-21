@@ -112,16 +112,33 @@ still cannot write, and a stranger gets an empty result.
      default is in place lands on a page nothing serves — the classic
      "localhost refused to connect" after clicking the email.
    - add the same address under **Redirect URLs**.
-4. Optional: in **Authentication → Emails → Magic Link**, add the code to the
-   template. The stock template has only a link, which the app accepts — paste
-   it into the sign-in screen rather than clicking it. A code is quicker to type
-   on a phone:
+4. Recommended: set up your own SMTP, then send a six-digit code instead of a
+   link.
+
+   Since June 2026 a free project on Supabase's built-in email service **cannot
+   edit its auth email templates** — the stock Magic Link mail carries only
+   `{{ .ConfirmationURL }}`, so there is no code in it. Configuring custom SMTP
+   restores template editing on any plan, free included, and lifts the built-in
+   service's limit of a couple of messages an hour.
+
+   Any provider with a free tier will do (Resend, Brevo, Mailgun). In **Project
+   Settings → Authentication → SMTP Settings**, enable custom SMTP and give it
+   the host, port, user and password from that provider, plus a verified sender
+   address.
+
+   Then, in **Authentication → Emails → Magic Link**:
 
    ```html
    <h2>Sign in to CKO PM Payroll</h2>
    <p>Your code is <b>{{ .Token }}</b> — type it into the page that asked for it.</p>
-   <p>Or <a href="{{ .ConfirmationURL }}">click here to sign in</a>.</p>
    ```
+
+   Leaving `{{ .ConfirmationURL }}` out entirely is the point: with no link in
+   the email there is nothing to tap, nothing opens a second window, and a phone
+   home-screen app works like everything else.
+
+   Without custom SMTP the app still works — the email has only a link, and the
+   sign-in screen takes a pasted link as well as a code.
 
    Either way the app finishes the sign-in itself, in the window that asked for
    it. Pasting the link rather than clicking it is what makes it work from a

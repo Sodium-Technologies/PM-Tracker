@@ -841,3 +841,6 @@ td.mid { text-align: center; }
   .signin { padding: calc(env(safe-area-inset-top) + 24px) env(safe-area-inset-right)
             calc(env(safe-area-inset-bottom) + 24px) env(safe-area-inset-left); }
 }
+
+.signin-row { display: flex; gap: 8px; align-items: stretch; }
+.signin-row .btn.wide { flex: 1; }

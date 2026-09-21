@@ -132,6 +132,12 @@ const samplePeriod = {
   ok('a browser is told pasting avoids the second window',
      /without opening another window/.test(await page.locator('.signin-card').innerText()));
   ok('the link can be pasted instead of clicked', await page.locator('#signin-link').isVisible());
+  // A sign-in button that silently does nothing is the worst failure there is:
+  // every one of them must say something when pressed.
+  await page.getByRole('button', { name: /Sign in with this link/ }).click();
+  await page.waitForTimeout(300);
+  ok('pressing sign-in with an empty box says so, never nothing',
+     /Paste the sign-in link/.test(await page.locator('.signin-card').innerText()));
   await page.locator('#signin-link').fill('not a link');
   await page.getByRole('button', { name: /Sign in with this link/ }).click();
   await page.waitForTimeout(400);
@@ -146,6 +152,11 @@ const samplePeriod = {
 
   await page.locator('.code-fallback summary').click();
   ok('the code is still there for an email that carries one', await page.locator('#signin-code').isVisible());
+  await page.locator('#signin-code').fill('');
+  await page.getByRole('button', { name: /Sign in with code/ }).click();
+  await page.waitForTimeout(300);
+  ok('pressing sign-in with an empty code says so too',
+     /Type the six-digit code/.test(await page.locator('.signin-card').innerText()));
   await page.locator('#signin-code').fill('000000');
   await page.getByRole('button', { name: /Sign in with code/ }).click();
   await page.waitForTimeout(500);
@@ -170,6 +181,12 @@ const samplePeriod = {
   await page.waitForTimeout(400);
   const text = await page.locator('.signin-card').innerText();
   ok('an installed app offers the paste box', await page.locator('#signin-link').isVisible());
+  ok('an installed app offers a clipboard button',
+     (await page.getByRole('button', { name: 'Paste', exact: true }).count()) === 1);
+  await page.getByRole('button', { name: /Sign in with this link/ }).click();
+  await page.waitForTimeout(300);
+  ok('an installed app never gets a dead button',
+     /Paste the sign-in link/.test(await page.locator('.signin-card').innerText()));
   ok('an installed app is told to copy the link, not tap it',
      /Copy Link/.test(text), text.split('\n').slice(-4)[0]);
   ok('an installed app explains why tapping fails',

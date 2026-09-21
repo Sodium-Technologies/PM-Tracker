@@ -137,12 +137,15 @@ export function signInErrorFromUrl(): string | null {
  *  would — no verifier, no matching browser, nothing else required. */
 export async function signInWithLink(raw: string): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Sign-in is not configured for this deployment.' };
-  const text = raw.trim();
+  // Mail wraps copied links, and a share sheet can hand over a whole sentence
+  // with the URL somewhere inside it. Take the first URL in whatever arrives.
+  const text = raw.replace(/\s+/g, ' ').trim();
   if (!text) return { error: 'Paste the whole link from the email.' };
+  const found = text.match(/https?:\/\/[^\s"'<>]+/i);
 
   let url: URL;
   try {
-    url = new URL(text);
+    url = new URL(found ? found[0] : text);
   } catch {
     return { error: 'That does not look like a link. Copy the whole thing, starting with https://' };
   }
