@@ -112,8 +112,9 @@ still cannot write, and a stranger gets an empty result.
      default is in place lands on a page nothing serves — the classic
      "localhost refused to connect" after clicking the email.
    - add the same address under **Redirect URLs**.
-4. Recommended: set up your own SMTP, then send a six-digit code instead of a
-   link.
+4. Required: set up your own SMTP, then send a six-digit code. The app signs
+   people in with a code and nothing else — there is no link to click anywhere
+   in it — so without this step nobody can get in.
 
    Since June 2026 a free project on Supabase's built-in email service **cannot
    edit its auth email templates** — the stock Magic Link mail carries only
@@ -155,15 +156,10 @@ still cannot write, and a stranger gets an empty result.
    the email there is nothing to tap, nothing opens a second window, and a phone
    home-screen app works like everything else.
 
-   Without custom SMTP the app still works — the email has only a link, and the
-   sign-in screen takes a pasted link as well as a code.
-
-   Either way the app finishes the sign-in itself, in the window that asked for
-   it. Pasting the link rather than clicking it is what makes it work from a
-   home-screen app, and from a browser other than the one that requested it. A
-   link still cannot survive a mail scanner opening it first — Outlook's link
-   protection routinely consumes one-time links — and in that case a new one, or
-   a code, is the way through.
+   Put the same body in **Confirm signup** as well. An address signing in for the
+   first time does not exist yet, and Supabase sends that template rather than
+   Magic Link for a new user — edit only one of the two and the first sign-in of
+   every new person arrives as a link they cannot use.
 
 5. Set two environment variables in Netlify (**Site configuration → Environment
    variables**), from **Project Settings → API**:
@@ -184,20 +180,13 @@ still cannot write, and a stranger gets an empty result.
 Open the site in Safari, **Share → Add to Home Screen**. It installs as its own
 app: full screen, its own icon, no browser chrome.
 
-Do not **tap** the sign-in link there. A home-screen app on iOS is a separate
-app with its own storage, and it can never be what a link from Mail opens —
-tapping it hands the sign-in to Safari, a different app, and this one never sees
-it.
+Signing in works there exactly as it does anywhere else: type the six-digit code
+from the email. That is the whole reason the app uses a code and no link.
 
-Instead, in the email press and hold the sign-in button, choose **Copy Link**,
-and paste it into the box on the sign-in screen. The app reads the token out of
-the link and verifies it itself, so the sign-in finishes in the window that
-asked for it. A six-digit code, if the template sends one, works the same way.
-
-The same paste is worth using in a browser: clicking the link opens a second
-copy of the app, because the link's destination *is* the app and that new tab is
-what performs the exchange, with the original tab picking the session up behind
-it. Pasting skips all of that.
+A home-screen app on iOS is a separate app with its own storage, and it can
+never be what a link from Mail opens — a link would hand the sign-in to Safari,
+a different app, and this one would never see it. A code is typed into the
+window that asked for it, so none of that applies.
 
 ### If the email never arrives
 

@@ -113,83 +113,13 @@ export function signInErrorFromUrl(): string | null {
   if (!code) return null;
   const description = (query.get('error_description') ?? hash.get('error_description') ?? '')
     .replace(/\+/g, ' ');
-  // Check the specific cause before the generic one: a PKCE failure arrives as
-  // `invalid_request`, which would otherwise be read as an expired link.
-  if (/flow_state|code verifier|pkce/i.test(code + description))
-    return 'That link was opened in a different browser from the one that requested it. '
-      + 'Request a new link and open it in this browser.';
-  if (/expired|invalid|otp/i.test(code + description))
-    return 'That sign-in link has expired or was already used. Request a new one below.';
+  // Sign-in emails carry a code now, so anything arriving here came from a link
+  // sent before that change, or from an old message still sitting in an inbox.
+  // Whatever it says, the answer is the same: ask for a code.
+  if (/flow_state|code verifier|pkce|expired|invalid|otp/i.test(code + description))
+    return 'That sign-in link no longer works. Ask for a code below — the email now '
+      + 'carries a six-digit code instead of a link.';
   return description || `Sign-in failed: ${code}`;
-}
-
-/** Sign in from the sign-in link itself, pasted in rather than clicked.
- *
- *  This is what makes an emailed link usable from a home-screen app, and from a
- *  browser other than the one that asked for it. Every shape Supabase can send
- *  is accepted:
- *
- *    …/auth/v1/verify?token=<hash>&type=magiclink   the link in the email
- *    …/?code=<code>                                 where a PKCE link lands
- *    …/#access_token=…&refresh_token=…              where an implicit link lands
- *
- *  A token hash is verified here, exactly as the server's own verify endpoint
- *  would — no verifier, no matching browser, nothing else required. */
-export async function signInWithLink(raw: string): Promise<{ error?: string }> {
-  if (!supabase) return { error: 'Sign-in is not configured for this deployment.' };
-  // Mail wraps copied links, and a share sheet can hand over a whole sentence
-  // with the URL somewhere inside it. Take the first URL in whatever arrives.
-  const text = raw.replace(/\s+/g, ' ').trim();
-  if (!text) return { error: 'Paste the whole link from the email.' };
-  const found = text.match(/https?:\/\/[^\s"'<>]+/i);
-
-  let url: URL;
-  try {
-    url = new URL(found ? found[0] : text);
-  } catch {
-    return { error: 'That does not look like a link. Copy the whole thing, starting with https://' };
-  }
-  const query = url.searchParams;
-  const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
-  const pick = (key: string) => query.get(key) ?? hash.get(key);
-
-  const failed = pick('error_description') ?? pick('error');
-  if (failed) return { error: failed.replace(/\+/g, ' ') };
-
-  const accessToken = pick('access_token');
-  const refreshToken = pick('refresh_token');
-  if (accessToken && refreshToken) {
-    const { error } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-    return error ? { error: error.message } : {};
-  }
-
-  const tokenHash = pick('token_hash') ?? pick('token');
-  if (tokenHash) {
-    const type = (pick('type') ?? 'magiclink') as 'magiclink' | 'email' | 'signup' | 'recovery' | 'invite';
-    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
-    if (!error) return {};
-    return {
-      error: /expired|invalid/i.test(error.message)
-        ? 'That link has expired or was already used — including by a mail scanner opening it first. Ask for a new one.'
-        : error.message,
-    };
-  }
-
-  const code = pick('code');
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return {};
-    return {
-      error: /verifier/i.test(error.message)
-        ? 'That link was issued for a different browser. Ask for a new one and paste it here.'
-        : error.message,
-    };
-  }
-
-  return { error: 'No sign-in token in that link. Copy the link the email points at, in full.' };
 }
 
 /** Clear the error out of the address bar so a reload does not repeat it. */
@@ -199,40 +129,22 @@ export function clearUrlError() {
   }
 }
 
-/** Send the sign-in email. It carries both a link and a six-digit code. */
-/** True when the page is running as an installed app rather than a browser tab:
- *  an iOS home-screen app, or an installed PWA elsewhere.
- *
- *  This matters for sign-in. An installed app has its own storage, separate from
- *  the browser's, and it can never be the target of a link opened from Mail — so
- *  a magic link requested here opens in Safari, which holds neither the PKCE
- *  verifier this app wrote nor, afterwards, a session this app can see. The code
- *  is the only method that works, because it never leaves this window. */
-export function isInstalledApp(): boolean {
-  if (typeof window === 'undefined') return false;
-  const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone;
-  return iosStandalone === true
-    || window.matchMedia?.('(display-mode: standalone)').matches === true
-    || window.matchMedia?.('(display-mode: fullscreen)').matches === true;
-}
-
+/** Send the sign-in email: a six-digit code, and nothing to click. */
 export async function sendSignInEmail(email: string): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Sign-in is not configured for this deployment.' };
-  const { error } = await supabase.auth.signInWithOtp({
-    email: email.trim(),
-    // Where the link lands if they use one. An installed app cannot be a link
-    // target, so this only ever matters in a browser tab.
-    options: { emailRedirectTo: window.location.origin + window.location.pathname },
-  });
+  // No emailRedirectTo: nothing here is opened from the email. The project's
+  // Magic Link template carries {{ .Token }} and no ConfirmationURL, so the
+  // message is a code, and the code is verified in this window.
+  const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
   return error ? { error: error.message } : {};
 }
 
-/** Sign in with the code from the email instead of the link.
+/** Sign in with the code from the email — the only way in.
  *
- *  The link depends on the project's Site URL and redirect list being right, on
+ *  A link depended on the project's Site URL and redirect list being right, on
  *  the same browser holding the verifier, and on no mail scanner having opened
- *  it first — each of which silently breaks sign-in for everyone. The code
- *  depends on none of that: it is typed into the page that asked for it. */
+ *  it first, each of which silently broke sign-in for everyone. The code depends
+ *  on none of that: it is typed into the page that asked for it. */
 export async function signInWithCode(email: string, token: string): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Sign-in is not configured for this deployment.' };
   const { error } = await supabase.auth.verifyOtp({

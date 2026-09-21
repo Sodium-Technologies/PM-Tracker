@@ -125,76 +125,49 @@ const samplePeriod = {
   ok('signed out shows no figures', (await page.locator('.figure').count()) === 0);
   ok('sign-in asks for an email', await page.locator('#signin-email').isVisible());
   await page.locator('#signin-email').fill('partner@company.com');
-  await page.getByRole('button', { name: /sign-in link/i }).click();
+  await page.getByRole('button', { name: /Email me a code/i }).click();
   await page.waitForTimeout(400);
-  ok('requesting a link confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
-  ok('either method is offered', /a link, a six-digit code, or both/.test(await page.locator('.signin-card').innerText()));
-  ok('a browser is told pasting avoids the second window',
-     /without opening another window/.test(await page.locator('.signin-card').innerText()));
-  ok('the link can be pasted instead of clicked', await page.locator('#signin-link').isVisible());
-  // A sign-in button that silently does nothing is the worst failure there is:
-  // every one of them must say something when pressed.
-  await page.getByRole('button', { name: /Sign in with this link/ }).click();
-  await page.waitForTimeout(300);
-  ok('pressing sign-in with an empty box says so, never nothing',
-     /Paste the sign-in link/.test(await page.locator('.signin-card').innerText()));
-  await page.locator('#signin-link').fill('not a link');
-  await page.getByRole('button', { name: /Sign in with this link/ }).click();
-  await page.waitForTimeout(400);
-  ok('text that is not a link is refused clearly',
-     /does not look like a link/.test(await page.locator('.signin-card').innerText()));
-
-  await page.locator('#signin-link').fill('https://stub.supabase.co/auth/v1/verify?token=stale-hash&type=magiclink');
-  await page.getByRole('button', { name: /Sign in with this link/ }).click();
-  await page.waitForTimeout(500);
-  ok('a used or expired link says which',
-     /expired or was already used/.test(await page.locator('.signin-card').innerText()));
-
-  await page.locator('.code-fallback summary').click();
-  ok('the code is still there for an email that carries one', await page.locator('#signin-code').isVisible());
+  const sentText = await page.locator('.signin-card').innerText();
+  ok('requesting a code confirms it was sent', sentText.includes('Check your email'));
+  ok('the code box is the only way in', await page.locator('#signin-code').isVisible());
+  ok('no link is offered anywhere on the screen',
+     !/paste|link/i.test(sentText.replace('Use a different address', '')), sentText.replace(/\n/g, ' / '));
+  // A sign-in button that silently does nothing is the worst failure there is.
   await page.locator('#signin-code').fill('');
-  await page.getByRole('button', { name: /Sign in with code/ }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForTimeout(300);
-  ok('pressing sign-in with an empty code says so too',
+  ok('pressing sign in with an empty box says so, never nothing',
      /Type the six-digit code/.test(await page.locator('.signin-card').innerText()));
+
   await page.locator('#signin-code').fill('000000');
-  await page.getByRole('button', { name: /Sign in with code/ }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForTimeout(500);
   ok('a wrong code is rejected with a reason',
      /wrong or has expired/.test(await page.locator('.signin-card').innerText()));
 
   await page.locator('#signin-code').fill('123456');
-  await page.getByRole('button', { name: /Sign in with code/ }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForTimeout(900);
-  ok('the right code signs in without touching a redirect URL',
+  ok('the right code signs in',
      (await page.locator('.signin-card').count()) === 0 || !(await page.locator('#signin-code').isVisible()),
      (await page.locator('h1').first().innerText().catch(() => 'signed in')));
   ok('no page errors while signed out', errors.length === 0, errors.join('; '));
   await ctx.close();
 }
 
-// 1b. the same screen from a home-screen app, where a link cannot work
+// 1b. the same screen from a home-screen app: one way in, and it works there
 {
   const { page, ctx } = await open({ installed: true });
   await page.locator('#signin-email').fill('partner@company.com');
-  await page.getByRole('button', { name: /sign-in link/i }).click();
+  await page.getByRole('button', { name: /Email me a code/i }).click();
   await page.waitForTimeout(400);
-  const text = await page.locator('.signin-card').innerText();
-  ok('an installed app offers the paste box', await page.locator('#signin-link').isVisible());
-  ok('an installed app offers a clipboard button',
-     (await page.getByRole('button', { name: 'Paste', exact: true }).count()) === 1);
-  await page.getByRole('button', { name: /Sign in with this link/ }).click();
-  await page.waitForTimeout(300);
-  ok('an installed app never gets a dead button',
-     /Paste the sign-in link/.test(await page.locator('.signin-card').innerText()));
-  ok('an installed app is told to copy the link, not tap it',
-     /Copy Link/.test(text), text.split('\n').slice(-4)[0]);
-  ok('an installed app explains why tapping fails',
-     /different app/.test(text), text.split('\n').slice(-4)[0]);
-  await page.locator('#signin-link').fill('https://stub.supabase.co/auth/v1/verify?token=good-hash&type=magiclink');
-  await page.getByRole('button', { name: /Sign in with this link/ }).click();
+  ok('an installed app gets the same code box', await page.locator('#signin-code').isVisible());
+  ok('an installed app is never sent to another app',
+     !/Safari|Copy Link|paste/i.test(await page.locator('.signin-card').innerText()));
+  await page.locator('#signin-code').fill('123456');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForTimeout(900);
-  ok('an installed app signs in from a pasted link', (await page.locator('#signin-link').count()) === 0);
+  ok('an installed app signs itself in', (await page.locator('#signin-code').count()) === 0);
   await ctx.close();
 }
 
@@ -270,8 +243,8 @@ const samplePeriod = {
 {
   const { page, ctx } = await open({ path: '/?error=access_denied&error_description=Email+link+is+invalid+or+has+expired' });
   const text = await page.locator('.signin-card').innerText();
-  ok('an expired link explains itself', /expired or was already used/.test(text), text.split('\n').slice(-2)[0]);
-  ok('an expired link still offers a new one', await page.locator('#signin-email').isVisible());
+  ok('an old link explains itself', /no longer works/.test(text), text.split('\n').slice(-2)[0]);
+  ok('an old link still offers a code', await page.locator('#signin-email').isVisible());
   ok('the error is cleared from the address bar', !(await page.evaluate(() => window.location.search)));
   await ctx.close();
 }
@@ -279,7 +252,7 @@ const samplePeriod = {
 {
   const { page, ctx } = await open({ path: '/?error=invalid_request&error_description=code+verifier+should+be+non-empty' });
   const text = await page.locator('.signin-card').innerText();
-  ok('a link opened in another browser says so', /different browser/.test(text), text.split('\n').slice(-2)[0]);
+  ok('any old link points at the code', /no longer works/.test(text), text.split('\n').slice(-2)[0]);
   await ctx.close();
 }
 
