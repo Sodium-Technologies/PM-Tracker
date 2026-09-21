@@ -1,5 +1,5 @@
 import React from 'react';
-import { clearUrlError, isInstalledApp, sendSignInEmail, signInErrorFromUrl, signInWithCode } from '../lib/auth';
+import { clearUrlError, isInstalledApp, sendSignInEmail, signInErrorFromUrl, signInWithCode, signInWithLink } from '../lib/auth';
 import Mark from './Mark';
 
 /** Sign-in, and the states that follow it: code entry, no access, and a
@@ -14,6 +14,7 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
 }) {
   const [address, setAddress] = React.useState('');
   const [code, setCode] = React.useState('');
+  const [link, setLink] = React.useState('');
   const [sent, setSent] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState(() => signInErrorFromUrl() ?? '');
@@ -33,6 +34,16 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
     setBusy(false);
     if (err) setError(err);
     else setSent(true);
+  };
+
+  const submitLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!link.trim()) return;
+    setBusy(true);
+    setError('');
+    const { error: err } = await signInWithLink(link);
+    setBusy(false);
+    if (err) setError(err);
   };
 
   const submitCode = async (e: React.FormEvent) => {
@@ -83,37 +94,62 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
       <Frame>
         <h1>Check your email</h1>
         <p>
-          Sent to <b>{address}</b>. Type the six-digit code from that email below.
-          {!installed && ' The email has a link too, but the code signs you in right here, without opening another window.'}
+          Sent to <b>{address}</b>. Sign in with whichever the email gives you —
+          a link, a six-digit code, or both.
         </p>
-        <form onSubmit={submitCode} className="signin-form">
-          <label htmlFor="signin-code">Six-digit code</label>
+
+        <form onSubmit={submitLink} className="signin-form">
+          <label htmlFor="signin-link">Paste the sign-in link</label>
+          {/* Deliberately not type="url": the browser would silently block the
+              submit on anything malformed, and this screen explains the problem
+              better than a tooltip does. */}
           <input
-            id="signin-code"
-            className="code-input"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={8}
-            autoFocus
-            value={code}
-            placeholder="123456"
-            onChange={(e) => setCode(e.target.value)}
+            id="signin-link"
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            value={link}
+            placeholder="https://…"
+            onChange={(e) => setLink(e.target.value)}
           />
-          <button className="btn primary" type="submit" disabled={busy || !code.trim()}>
-            {busy ? 'Checking…' : 'Sign in with code'}
+          <button className="btn primary" type="submit" disabled={busy || !link.trim()}>
+            {busy ? 'Checking…' : 'Sign in with this link'}
           </button>
         </form>
-        {error && <p className="signin-error">{error}</p>}
         <p className="signin-note">
-          No code in the email, only a link? The email template needs to include the
-          token — see "Sharing it with other people" in the README.
-          {installed && ' On a home-screen app the link cannot work: it opens in Safari, which is a different app with its own sign-in.'}
+          {installed
+            ? 'In the email, press and hold the sign-in button, choose Copy Link, and paste it above. Tapping it opens Safari, which is a different app and cannot sign this one in.'
+            : 'Long-press or right-click the button in the email and copy the link. Pasting it here signs you in without opening another window.'}
         </p>
+
+        <details className="code-fallback">
+          <summary>The email shows a six-digit code</summary>
+          <form onSubmit={submitCode} className="signin-form">
+            <label htmlFor="signin-code">Six-digit code</label>
+            <input
+              id="signin-code"
+              className="code-input"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={8}
+              value={code}
+              placeholder="123456"
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <button className="btn primary" type="submit" disabled={busy || !code.trim()}>
+              {busy ? 'Checking…' : 'Sign in with code'}
+            </button>
+          </form>
+        </details>
+
+        {error && <p className="signin-error">{error}</p>}
         <p className="signin-note">
           Nothing arriving? A project's built-in mail service is rate limited to a few
           messages an hour. Wait a few minutes, or set up your own SMTP.
         </p>
-        <button className="link" onClick={() => { setSent(false); setCode(''); setError(''); }}>
+        <button className="link" onClick={() => { setSent(false); setCode(''); setLink(''); setError(''); }}>
           Use a different address
         </button>
       </Frame>
@@ -136,7 +172,7 @@ export default function SignIn({ email, noAccess, configError, onSignOut }: {
           onChange={(e) => setAddress(e.target.value)}
         />
         <button className="btn primary" type="submit" disabled={busy}>
-          {busy ? 'Sending…' : 'Email me a sign-in code'}
+          {busy ? 'Sending…' : 'Email me a sign-in link'}
         </button>
       </form>
       {error && <p className="signin-error">{error}</p>}

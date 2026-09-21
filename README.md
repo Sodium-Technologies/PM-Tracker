@@ -112,9 +112,10 @@ still cannot write, and a stranger gets an empty result.
      default is in place lands on a page nothing serves — the classic
      "localhost refused to connect" after clicking the email.
    - add the same address under **Redirect URLs**.
-4. In **Authentication → Emails → Magic Link**, put the code in the template.
-   The stock template has only a link, and the app now signs people in with a
-   six-digit code, so without this nobody can get in:
+4. Optional: in **Authentication → Emails → Magic Link**, add the code to the
+   template. The stock template has only a link, which the app accepts — paste
+   it into the sign-in screen rather than clicking it. A code is quicker to type
+   on a phone:
 
    ```html
    <h2>Sign in to CKO PM Payroll</h2>
@@ -122,12 +123,12 @@ still cannot write, and a stranger gets an empty result.
    <p>Or <a href="{{ .ConfirmationURL }}">click here to sign in</a>.</p>
    ```
 
-   The code is the reliable half. A link depends on the Site URL being right, on
-   the same browser holding the verifier, and on no mail scanner having opened it
-   first — Outlook's link protection routinely consumes one-time links before the
-   person clicks. It also cannot work at all from a home-screen app (see below).
-   The code depends on none of that: it is typed into the window that asked for
-   it, so it never leaves the app.
+   Either way the app finishes the sign-in itself, in the window that asked for
+   it. Pasting the link rather than clicking it is what makes it work from a
+   home-screen app, and from a browser other than the one that requested it. A
+   link still cannot survive a mail scanner opening it first — Outlook's link
+   protection routinely consumes one-time links — and in that case a new one, or
+   a code, is the way through.
 
 5. Set two environment variables in Netlify (**Site configuration → Environment
    variables**), from **Project Settings → API**:
@@ -148,16 +149,20 @@ still cannot write, and a stranger gets an empty result.
 Open the site in Safari, **Share → Add to Home Screen**. It installs as its own
 app: full screen, its own icon, no browser chrome.
 
-Sign in there with the **code**, never the link. A home-screen app on iOS is a
-separate app with its own storage, and it can never be what a link from Mail
-opens — tapping the link opens Safari, which holds neither the verifier this app
-wrote when it asked for the email nor, afterwards, a session this app can read.
-So the app detects that it is installed, does not offer a link, and asks for the
-code straight away.
+Do not **tap** the sign-in link there. A home-screen app on iOS is a separate
+app with its own storage, and it can never be what a link from Mail opens —
+tapping it hands the sign-in to Safari, a different app, and this one never sees
+it.
 
-The same is why a link clicked in a browser opens a second copy of the app: the
-link's destination *is* the app, and that new tab is what performs the exchange;
-the original tab then picks the session up. Using the code avoids it entirely.
+Instead, in the email press and hold the sign-in button, choose **Copy Link**,
+and paste it into the box on the sign-in screen. The app reads the token out of
+the link and verifies it itself, so the sign-in finishes in the window that
+asked for it. A six-digit code, if the template sends one, works the same way.
+
+The same paste is worth using in a browser: clicking the link opens a second
+copy of the app, because the link's destination *is* the app and that new tab is
+what performs the exchange, with the original tab picking the session up behind
+it. Pasting skips all of that.
 
 ### If the email never arrives
 

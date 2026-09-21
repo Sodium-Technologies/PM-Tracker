@@ -63,6 +63,14 @@ async function open({ email, role, periods = [], down = false, path = '', instal
     if (url.includes('/auth/v1/otp')) return json({});
     if (url.includes('/auth/v1/verify')) {
       const body = JSON.parse(route.request().postData() || '{}');
+      // A pasted link arrives as a token hash rather than a typed code.
+      if (body.token_hash) {
+        if (body.token_hash === 'good-hash') return json(session(email ?? 'partner@company.com'));
+        return route.fulfill({
+          status: 403, contentType: 'application/json',
+          body: JSON.stringify({ error: 'invalid_grant', error_description: 'Token has expired or is invalid' }),
+        });
+      }
       // The stub accepts one code, so the page's success and failure paths are
       // both exercised.
       if (body.token === '123456') return json(session(body.email));
@@ -117,13 +125,27 @@ const samplePeriod = {
   ok('signed out shows no figures', (await page.locator('.figure').count()) === 0);
   ok('sign-in asks for an email', await page.locator('#signin-email').isVisible());
   await page.locator('#signin-email').fill('partner@company.com');
-  await page.getByRole('button', { name: /sign-in code/i }).click();
+  await page.getByRole('button', { name: /sign-in link/i }).click();
   await page.waitForTimeout(400);
-  ok('requesting a code confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
-  ok('the code is the main instruction', /six-digit code/i.test(await page.locator('.signin-card').innerText()));
-  ok('the code box is ready to type into, not hidden', await page.locator('#signin-code').isVisible());
-  ok('a browser is still told the link works',
+  ok('requesting a link confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
+  ok('either method is offered', /a link, a six-digit code, or both/.test(await page.locator('.signin-card').innerText()));
+  ok('a browser is told pasting avoids the second window',
      /without opening another window/.test(await page.locator('.signin-card').innerText()));
+  ok('the link can be pasted instead of clicked', await page.locator('#signin-link').isVisible());
+  await page.locator('#signin-link').fill('not a link');
+  await page.getByRole('button', { name: /Sign in with this link/ }).click();
+  await page.waitForTimeout(400);
+  ok('text that is not a link is refused clearly',
+     /does not look like a link/.test(await page.locator('.signin-card').innerText()));
+
+  await page.locator('#signin-link').fill('https://stub.supabase.co/auth/v1/verify?token=stale-hash&type=magiclink');
+  await page.getByRole('button', { name: /Sign in with this link/ }).click();
+  await page.waitForTimeout(500);
+  ok('a used or expired link says which',
+     /expired or was already used/.test(await page.locator('.signin-card').innerText()));
+
+  await page.locator('.code-fallback summary').click();
+  ok('the code is still there for an email that carries one', await page.locator('#signin-code').isVisible());
   await page.locator('#signin-code').fill('000000');
   await page.getByRole('button', { name: /Sign in with code/ }).click();
   await page.waitForTimeout(500);
@@ -144,17 +166,18 @@ const samplePeriod = {
 {
   const { page, ctx } = await open({ installed: true });
   await page.locator('#signin-email').fill('partner@company.com');
-  await page.getByRole('button', { name: /sign-in code/i }).click();
+  await page.getByRole('button', { name: /sign-in link/i }).click();
   await page.waitForTimeout(400);
   const text = await page.locator('.signin-card').innerText();
-  ok('an installed app asks for the code straight away', await page.locator('#signin-code').isVisible());
-  ok('an installed app is not promised a working link', !/without opening another window/.test(text));
-  ok('an installed app explains why the link cannot work',
-     /opens in Safari/.test(text), text.split('\n').slice(-4)[0]);
-  await page.locator('#signin-code').fill('123456');
-  await page.getByRole('button', { name: /Sign in with code/ }).click();
+  ok('an installed app offers the paste box', await page.locator('#signin-link').isVisible());
+  ok('an installed app is told to copy the link, not tap it',
+     /Copy Link/.test(text), text.split('\n').slice(-4)[0]);
+  ok('an installed app explains why tapping fails',
+     /different app/.test(text), text.split('\n').slice(-4)[0]);
+  await page.locator('#signin-link').fill('https://stub.supabase.co/auth/v1/verify?token=good-hash&type=magiclink');
+  await page.getByRole('button', { name: /Sign in with this link/ }).click();
   await page.waitForTimeout(900);
-  ok('an installed app can sign in with the code', (await page.locator('#signin-code').count()) === 0);
+  ok('an installed app signs in from a pasted link', (await page.locator('#signin-link').count()) === 0);
   await ctx.close();
 }
 

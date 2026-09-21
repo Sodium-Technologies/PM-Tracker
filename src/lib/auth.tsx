@@ -123,6 +123,72 @@ export function signInErrorFromUrl(): string | null {
   return description || `Sign-in failed: ${code}`;
 }
 
+/** Sign in from the sign-in link itself, pasted in rather than clicked.
+ *
+ *  This is what makes an emailed link usable from a home-screen app, and from a
+ *  browser other than the one that asked for it. Every shape Supabase can send
+ *  is accepted:
+ *
+ *    …/auth/v1/verify?token=<hash>&type=magiclink   the link in the email
+ *    …/?code=<code>                                 where a PKCE link lands
+ *    …/#access_token=…&refresh_token=…              where an implicit link lands
+ *
+ *  A token hash is verified here, exactly as the server's own verify endpoint
+ *  would — no verifier, no matching browser, nothing else required. */
+export async function signInWithLink(raw: string): Promise<{ error?: string }> {
+  if (!supabase) return { error: 'Sign-in is not configured for this deployment.' };
+  const text = raw.trim();
+  if (!text) return { error: 'Paste the whole link from the email.' };
+
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return { error: 'That does not look like a link. Copy the whole thing, starting with https://' };
+  }
+  const query = url.searchParams;
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const pick = (key: string) => query.get(key) ?? hash.get(key);
+
+  const failed = pick('error_description') ?? pick('error');
+  if (failed) return { error: failed.replace(/\+/g, ' ') };
+
+  const accessToken = pick('access_token');
+  const refreshToken = pick('refresh_token');
+  if (accessToken && refreshToken) {
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    return error ? { error: error.message } : {};
+  }
+
+  const tokenHash = pick('token_hash') ?? pick('token');
+  if (tokenHash) {
+    const type = (pick('type') ?? 'magiclink') as 'magiclink' | 'email' | 'signup' | 'recovery' | 'invite';
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    if (!error) return {};
+    return {
+      error: /expired|invalid/i.test(error.message)
+        ? 'That link has expired or was already used — including by a mail scanner opening it first. Ask for a new one.'
+        : error.message,
+    };
+  }
+
+  const code = pick('code');
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) return {};
+    return {
+      error: /verifier/i.test(error.message)
+        ? 'That link was issued for a different browser. Ask for a new one and paste it here.'
+        : error.message,
+    };
+  }
+
+  return { error: 'No sign-in token in that link. Copy the link the email points at, in full.' };
+}
+
 /** Clear the error out of the address bar so a reload does not repeat it. */
 export function clearUrlError() {
   if (window.location.search || window.location.hash) {
