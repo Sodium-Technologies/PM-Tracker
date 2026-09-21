@@ -47,8 +47,15 @@ const session = (email) => ({
 /** Open the app with Supabase stubbed: `role` null means "not on the list".
  *  `down: true` makes every call to the project fail, as an unreachable or
  *  paused project does. */
-async function open({ email, role, periods = [], down = false, path = '' }) {
+async function open({ email, role, periods = [], down = false, path = '', installed = false }) {
   const ctx = await browser.newContext();
+  // iOS reports a home-screen app through navigator.standalone; the app reads it
+  // to decide that a sign-in link cannot possibly work here.
+  if (installed) {
+    await ctx.addInitScript(() => {
+      Object.defineProperty(window.navigator, 'standalone', { value: true, configurable: true });
+    });
+  }
   await ctx.route('**/stub.supabase.co/**', async (route) => {
     if (down) return route.abort('connectionrefused');
     const url = route.request().url();
@@ -110,14 +117,13 @@ const samplePeriod = {
   ok('signed out shows no figures', (await page.locator('.figure').count()) === 0);
   ok('sign-in asks for an email', await page.locator('#signin-email').isVisible());
   await page.locator('#signin-email').fill('partner@company.com');
-  await page.getByRole('button', { name: /sign-in link/i }).click();
+  await page.getByRole('button', { name: /sign-in code/i }).click();
   await page.waitForTimeout(400);
-  ok('requesting a link confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
-  ok('the link is the main instruction', /Click the link/.test(await page.locator('.signin-card').innerText()));
-  ok('code entry is offered but not demanded', !(await page.locator('#signin-code').isVisible()));
-
-  await page.locator('.code-fallback summary').click();
-  ok('the code option opens on request', await page.locator('#signin-code').isVisible());
+  ok('requesting a code confirms it was sent', (await page.locator('.signin-card').innerText()).includes('Check your email'));
+  ok('the code is the main instruction', /six-digit code/i.test(await page.locator('.signin-card').innerText()));
+  ok('the code box is ready to type into, not hidden', await page.locator('#signin-code').isVisible());
+  ok('a browser is still told the link works',
+     /without opening another window/.test(await page.locator('.signin-card').innerText()));
   await page.locator('#signin-code').fill('000000');
   await page.getByRole('button', { name: /Sign in with code/ }).click();
   await page.waitForTimeout(500);
@@ -131,6 +137,24 @@ const samplePeriod = {
      (await page.locator('.signin-card').count()) === 0 || !(await page.locator('#signin-code').isVisible()),
      (await page.locator('h1').first().innerText().catch(() => 'signed in')));
   ok('no page errors while signed out', errors.length === 0, errors.join('; '));
+  await ctx.close();
+}
+
+// 1b. the same screen from a home-screen app, where a link cannot work
+{
+  const { page, ctx } = await open({ installed: true });
+  await page.locator('#signin-email').fill('partner@company.com');
+  await page.getByRole('button', { name: /sign-in code/i }).click();
+  await page.waitForTimeout(400);
+  const text = await page.locator('.signin-card').innerText();
+  ok('an installed app asks for the code straight away', await page.locator('#signin-code').isVisible());
+  ok('an installed app is not promised a working link', !/without opening another window/.test(text));
+  ok('an installed app explains why the link cannot work',
+     /opens in Safari/.test(text), text.split('\n').slice(-4)[0]);
+  await page.locator('#signin-code').fill('123456');
+  await page.getByRole('button', { name: /Sign in with code/ }).click();
+  await page.waitForTimeout(900);
+  ok('an installed app can sign in with the code', (await page.locator('#signin-code').count()) === 0);
   await ctx.close();
 }
 

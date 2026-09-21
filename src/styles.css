@@ -828,3 +828,16 @@ td.mid { text-align: center; }
 
 .signin-brand { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .mark.lg { width: 34px; height: 34px; }
+
+/* Rows that give context rather than take part in the sum. */
+.settle .row.muted-row dt, .settle .row.muted-row dd { color: var(--ink-faint); }
+
+/* Installed on a phone home screen there is no browser chrome, so the app has
+   to keep clear of the notch and the home indicator itself. */
+@supports (padding: env(safe-area-inset-top)) {
+  .app { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  .rail { padding-bottom: env(safe-area-inset-bottom); }
+  .head { padding-top: calc(env(safe-area-inset-top) + 18px); }
+  .signin { padding: calc(env(safe-area-inset-top) + 24px) env(safe-area-inset-right)
+            calc(env(safe-area-inset-bottom) + 24px) env(safe-area-inset-left); }
+}

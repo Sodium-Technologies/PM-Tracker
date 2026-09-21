@@ -131,10 +131,28 @@ export function clearUrlError() {
 }
 
 /** Send the sign-in email. It carries both a link and a six-digit code. */
-export async function sendSignInLink(email: string): Promise<{ error?: string }> {
+/** True when the page is running as an installed app rather than a browser tab:
+ *  an iOS home-screen app, or an installed PWA elsewhere.
+ *
+ *  This matters for sign-in. An installed app has its own storage, separate from
+ *  the browser's, and it can never be the target of a link opened from Mail — so
+ *  a magic link requested here opens in Safari, which holds neither the PKCE
+ *  verifier this app wrote nor, afterwards, a session this app can see. The code
+ *  is the only method that works, because it never leaves this window. */
+export function isInstalledApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone;
+  return iosStandalone === true
+    || window.matchMedia?.('(display-mode: standalone)').matches === true
+    || window.matchMedia?.('(display-mode: fullscreen)').matches === true;
+}
+
+export async function sendSignInEmail(email: string): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Sign-in is not configured for this deployment.' };
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim(),
+    // Where the link lands if they use one. An installed app cannot be a link
+    // target, so this only ever matters in a browser tab.
     options: { emailRedirectTo: window.location.origin + window.location.pathname },
   });
   return error ? { error: error.message } : {};

@@ -385,7 +385,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
               <Figure label="Total to pay out" value={fmtPkr(result.ledger.transferablePkr)}
                 sub={`${period.staff.length} people · ${period.accounts.length} clients`} />
               <Figure label="Left to send" value={fmtPkr(result.ledger.remainingPkr)}
-                sub={`of ${fmtPkr(result.ledger.transferablePkr)}`}
+                sub={`of ${fmtPkr(result.ledger.receivedPkr)} received`}
                 lead negative={negativePkr(result.ledger.remainingPkr)} />
             </dl>
 

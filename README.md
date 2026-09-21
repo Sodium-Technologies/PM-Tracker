@@ -106,11 +106,9 @@ still cannot write, and a stranger gets an empty result.
      default is in place lands on a page nothing serves — the classic
      "localhost refused to connect" after clicking the email.
    - add the same address under **Redirect URLs**.
-4. Optional, and only on a plan that allows editing email templates: in
-   **Authentication → Emails → Magic Link**, offer the code as well as the link.
-   The stock template has only the link, and the link is enough once step 3 is
-   right — the code is a fallback for when a mail scanner opens links, or the
-   reader is on a different device:
+4. In **Authentication → Emails → Magic Link**, put the code in the template.
+   The stock template has only a link, and the app now signs people in with a
+   six-digit code, so without this nobody can get in:
 
    ```html
    <h2>Sign in to CKO PM Payroll</h2>
@@ -121,7 +119,10 @@ still cannot write, and a stranger gets an empty result.
    The code is the reliable half. A link depends on the Site URL being right, on
    the same browser holding the verifier, and on no mail scanner having opened it
    first — Outlook's link protection routinely consumes one-time links before the
-   person clicks. The code depends on none of that.
+   person clicks. It also cannot work at all from a home-screen app (see below).
+   The code depends on none of that: it is typed into the window that asked for
+   it, so it never leaves the app.
+
 5. Set two environment variables in Netlify (**Site configuration → Environment
    variables**), from **Project Settings → API**:
 
@@ -135,6 +136,22 @@ still cannot write, and a stranger gets an empty result.
    as *View only* or *Can edit*.
 7. Load the books once — *Import sheet or backup* — and they are shared with
    everyone who has access.
+
+### On a phone home screen
+
+Open the site in Safari, **Share → Add to Home Screen**. It installs as its own
+app: full screen, its own icon, no browser chrome.
+
+Sign in there with the **code**, never the link. A home-screen app on iOS is a
+separate app with its own storage, and it can never be what a link from Mail
+opens — tapping the link opens Safari, which holds neither the verifier this app
+wrote when it asked for the email nor, afterwards, a session this app can read.
+So the app detects that it is installed, does not offer a link, and asks for the
+code straight away.
+
+The same is why a link clicked in a browser opens a second copy of the app: the
+link's destination *is* the app, and that new tab is what performs the exchange;
+the original tab then picks the session up. Using the code avoids it entirely.
 
 ### If the email never arrives
 

@@ -71,11 +71,20 @@ export default function Ledger({ period, result, update }: {
         <section className="panel">
           <div className="panel-head"><h2>What is left to send</h2><span className="hint">all figures in PKR</span></div>
           <dl className="settle">
-            <div className="row"><dt>Pay for the team</dt><dd>{fmtPkr(result.totals.staffPayPkr)}</dd></div>
-            <div className="row"><dt>Other people to pay</dt><dd>{fmtPkr(L.otherPayablesPkr)}</dd></div>
-            <div className="row"><dt>The company's share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
-            <div className="row rule"><dt>Total to pay out</dt><dd>{fmtPkr(L.transferablePkr)}</dd></div>
-            <div className="row"><dt>Went straight to the company</dt><dd>−{fmtPkr(L.directPkr)}</dd></div>
+            <div className="row muted-row"><dt>Pay for the team</dt><dd>{fmtPkr(result.totals.staffPayPkr)}</dd></div>
+            <div className="row muted-row"><dt>Other people to pay</dt><dd>{fmtPkr(L.otherPayablesPkr)}</dd></div>
+            <div className="row muted-row"><dt>The company's share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
+            <div className="row rule muted-row">
+              <dt>The month is worth <span className="hint">paid or not</span></dt>
+              <dd>{fmtPkr(L.transferablePkr)}</dd>
+            </div>
+            <div className="row"><dt>Money received from clients</dt><dd>{fmtPkr(L.receivedPkr)}</dd></div>
+            {L.directPkr > 0 && (
+              <div className="row muted-row">
+                <dt>Went straight to the company <span className="hint">never in your hands</span></dt>
+                <dd>{fmtPkr(L.directPkr)}</dd>
+              </div>
+            )}
             <div className="row"><dt>Already spent on that side</dt><dd>−{fmtPkr(L.reimbursementsPkr)}</dd></div>
             <div className="row"><dt>You paid it yourself</dt><dd>−{fmtPkr(L.localWagesPkr)}</dd></div>
             <div className="row"><dt>Kept back this month</dt><dd>−{fmtPkr(L.withheldPkr)}</dd></div>
@@ -84,6 +93,13 @@ export default function Ledger({ period, result, update }: {
               <dt>Left to send</dt><dd>{fmtPkr(L.remainingPkr)}</dd>
             </div>
           </dl>
+          {!L.receivedPkr && L.transferablePkr > 0 && (
+            <p className="panel-note">
+              {L.transfersPkr > 0
+                ? 'Money has gone out, but no client is marked as received — tick Received on the Revenue tab for the ones who have paid.'
+                : 'No client has paid yet this month, so there is nothing to send on. Mark an account as received on the Revenue tab as the money arrives.'}
+            </p>
+          )}
         </section>
 
       </div>

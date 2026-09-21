@@ -88,8 +88,12 @@ export interface PeriodResult {
   };
   ledger: {
     otherPayablesPkr: number;
-    /** everything owed this period: team pay + other people + company share */
+    /** everything owed this period: team pay + other people + company share.
+     *  What the month is worth — not what has arrived. */
     transferablePkr: number;
+    /** money that has actually come in: accounts marked received, less any the
+     *  client paid straight into the company's account */
+    receivedPkr: number;
     /** money from clients who pay the company directly — never passes through
      *  the person keeping the books, so it is not theirs to send on */
     directPkr: number;
@@ -105,6 +109,10 @@ export interface PeriodResult {
   };
   warnings: string[];
 }
+
+/** A client has paid when the account says so. The status is free text, so it
+ *  is matched the same way everywhere. */
+export const isReceived = (status: string) => /received/i.test(status || '');
 
 export function computePeriod(period: Period): PeriodResult {
   const rate = Number(period.usdToPkr) || 0;
@@ -150,14 +158,32 @@ export function computePeriod(period: Period): PeriodResult {
   // team's part and the company's part — is already where it needs to be.
   const directPkr = sum(accounts.filter((a) => a.account.paidDirect).map((a) => a.earnedPkr));
 
-  // Everything owed for the period …
+  // Everything the month is worth, whether or not a client has paid yet.
   const transferablePkr = t.staffPayPkr + otherPayablesPkr + t.companyPkr;
-  // … less every reason a rupee of it does not have to be sent.
-  const remainingPkr =
-    transferablePkr - directPkr - reimbursementsPkr - localWagesPkr - withheldPkr - transfersPkr;
+  // Only money in hand can be sent on. An account the client paid straight into
+  // the company's account never reaches the person keeping the books, so it is
+  // not part of what they hold either.
+  const receivedPkr = sum(
+    accounts
+      .filter((a) => isReceived(a.account.status) && !a.account.paidDirect)
+      .map((a) => a.earnedPkr),
+  );
+  // What is left to send is the money in hand, less every rupee of it that has
+  // already gone somewhere: handed over here (a wage paid locally), spent on
+  // that side, held back, or already transferred.
+  const remainingPkr = receivedPkr - reimbursementsPkr - localWagesPkr - withheldPkr - transfersPkr;
 
   const warnings: string[] = [];
   if (!rate) warnings.push('The USD to PKR rate for this month has not been set.');
+  // Money went out, but no client is marked as having paid: the balance below
+  // is counting against nothing, and the statuses are what need fixing.
+  if (transfersPkr > 0 && receivedPkr === 0 && t.earnedPkr > 0) {
+    warnings.push(
+      'Money has already been sent this month, but no client is marked as received — '
+      + 'tick Received on the Revenue tab for the ones who have paid, or "Left to send" '
+      + 'will read as an overdraft.',
+    );
+  }
   for (const ar of accounts) {
     const pct = round2(ar.allocated * 100);
     if (ar.earnedUsd !== 0 && pct !== 100) {
@@ -180,6 +206,7 @@ export function computePeriod(period: Period): PeriodResult {
     ledger: {
       otherPayablesPkr,
       transferablePkr,
+      receivedPkr,
       directPkr,
       reimbursementsPkr,
       retainedPkr,

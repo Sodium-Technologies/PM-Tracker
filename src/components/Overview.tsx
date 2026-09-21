@@ -47,12 +47,13 @@ export default function Overview({ periods, period, result }: {
           <div className="row"><dt>Money earned</dt><dd>{fmtUsd(result.totals.earnedUsd)}</dd></div>
           <div className="row"><dt>The team's share</dt><dd>{fmtPkr(result.totals.freelancerPkr)}</dd></div>
           <div className="row"><dt>The company's share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
-          <div className="row rule"><dt>Total to pay out</dt><dd>{fmtPkr(result.ledger.transferablePkr)}</dd></div>
-          {result.ledger.directPkr > 0 && (
-            <div className="row"><dt>Went straight to the company</dt><dd>−{fmtPkr(result.ledger.directPkr)}</dd></div>
-          )}
+          <div className="row rule"><dt>The month is worth</dt><dd>{fmtPkr(result.ledger.transferablePkr)}</dd></div>
+          <div className="row"><dt>Money received so far</dt><dd>{fmtPkr(result.ledger.receivedPkr)}</dd></div>
           {result.ledger.localWagesPkr > 0 && (
             <div className="row"><dt>You paid it yourself</dt><dd>−{fmtPkr(result.ledger.localWagesPkr)}</dd></div>
+          )}
+          {result.ledger.transfersPkr > 0 && (
+            <div className="row"><dt>Already sent</dt><dd>−{fmtPkr(result.ledger.transfersPkr)}</dd></div>
           )}
           <div className={`row final${negativePkr(result.ledger.remainingPkr) ? ' negative' : ''}`}>
             <dt>Left to send</dt><dd>{fmtPkr(result.ledger.remainingPkr)}</dd>

@@ -1,0 +1,17 @@
+{
+  "name": "CKO PM Payroll",
+  "short_name": "CKO Payroll",
+  "description": "The monthly payroll ledger: what each client earned, what each person is owed, and what is left to send.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f1f5f4",
+  "theme_color": "#0f6f63",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "./apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
