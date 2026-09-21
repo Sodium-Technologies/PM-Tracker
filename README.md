@@ -121,10 +121,28 @@ still cannot write, and a stranger gets an empty result.
    restores template editing on any plan, free included, and lifts the built-in
    service's limit of a couple of messages an hour.
 
-   Any provider with a free tier will do (Resend, Brevo, Mailgun). In **Project
-   Settings → Authentication → SMTP Settings**, enable custom SMTP and give it
-   the host, port, user and password from that provider, plus a verified sender
-   address.
+   Any provider with a free tier will do, but **without a domain of your own,
+   use Brevo**: it verifies a single sender address with a code emailed to it,
+   where Resend's sandbox sender (`onboarding@resend.dev`) delivers only to the
+   Resend account holder — everyone else gets nothing, silently.
+
+   In Brevo: add and verify the sender under **Senders, Domains & Dedicated
+   IPs**, then take a key from **SMTP & API → SMTP → Generate a new SMTP key**
+   (an SMTP key, not an API key), and note the **Login** shown on that tab.
+   Then, in Supabase's **Project Settings → Authentication → SMTP Settings**:
+
+   ```
+   Sender email   the address you verified
+   Sender name    CKO PM Payroll
+   Host           smtp-relay.brevo.com
+   Port           587
+   Username       the Login from the SMTP tab
+   Password       the SMTP key
+   ```
+
+   Sending from a free mailbox rather than a domain you control means no aligned
+   SPF or DKIM, so the first few messages may land in spam. Check there before
+   concluding nothing was sent.
 
    Then, in **Authentication → Emails → Magic Link**:
 
