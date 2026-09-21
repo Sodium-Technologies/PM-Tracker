@@ -1,5 +1,5 @@
 import type { Period } from '../lib/types';
-import { fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
+import { fmtPkr, fmtUsd, round2, sum, type PeriodResult } from '../lib/calc';
 import { EditOnly, NumberInput, TextInput } from './Fields';
 import { newStaff } from '../lib/state';
 import { useCanEdit } from '../lib/access';
@@ -54,6 +54,8 @@ export default function DivisionMatrix({ period, result, update, onApplyPaidHere
               <th>Person</th>
               <th className="fig">Change by hand</th>
               <th className="fig">They get</th>
+              <th className="fig" title="Money this person has already taken this month. It comes off their pay first; anything beyond it is a draw.">Taken already</th>
+              <th className="fig">Still owed</th>
               <th title="You hand this person their pay yourself, so it does not need sending">You pay them</th>
               {result.accounts.map((a) => (
                 <th key={a.account.id} className="fig">
@@ -81,6 +83,18 @@ export default function DivisionMatrix({ period, result, update, onApplyPaidHere
                     })} />
                 </td>
                 <td className="fig mono total" title={fmtUsd(s.payUsd)}>{fmtPkr(s.payPkr)}</td>
+                <td className="fig">
+                  <NumberInput value={s.staff.advancePkr} width={78}
+                    onChange={(v) => update((d) => {
+                      const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.advancePkr = v;
+                    })} />
+                </td>
+                <td className={`fig mono${s.drawPkr > 0 ? ' alloc-off' : ' sub-fig'}`}
+                  title={s.drawPkr > 0
+                    ? `Took ${fmtPkr(s.staff.advancePkr)} against ${fmtPkr(s.payPkr)} of pay — ${fmtPkr(s.drawPkr)} is a draw`
+                    : 'Pay not yet in their hands'}>
+                  {s.drawPkr > 0 ? `draw ${fmtPkr(s.drawPkr)}` : fmtPkr(s.stillOwedPkr)}
+                </td>
                 <td className="mid">
                   <label className="check">
                     <input type="checkbox" checked={s.staff.retained} disabled={!canEdit}
@@ -112,7 +126,7 @@ export default function DivisionMatrix({ period, result, update, onApplyPaidHere
               </tr>
             ))}
             {!period.staff.length && (
-              <tr><td colSpan={result.accounts.length + 5} className="empty">Nobody added yet.</td></tr>
+              <tr><td colSpan={result.accounts.length + 7} className="empty">Nobody added yet.</td></tr>
             )}
           </tbody>
           <tfoot>
@@ -120,6 +134,8 @@ export default function DivisionMatrix({ period, result, update, onApplyPaidHere
               <td>Shared out</td>
               <td />
               <td className="fig mono">{fmtPkr(result.totals.staffPayPkr)}</td>
+              <td className="fig mono">{fmtPkr(result.ledger.advancesPkr + result.ledger.drawsPkr)}</td>
+              <td className="fig mono">{fmtPkr(sum(result.staff.map((s) => s.stillOwedPkr)))}</td>
               <td />
               {result.accounts.map((a) => {
                 const pct = round2(a.allocated * 100);

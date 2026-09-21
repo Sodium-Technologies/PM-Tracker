@@ -19,18 +19,32 @@ export default function Ledger({ period, result, update }: {
           <div className="panel-head">
             <h2>You paid this yourself <span className="hint">so it does not need sending</span></h2>
             <EditOnly>
-              <button className="btn" onClick={() => update((d) => d.localWages.push({
-                id: uid(), label: 'Draw', amountPkr: 0,
-              }))}>Add</button>
+              <button className="btn" title="Somebody with no share of a client. A person on the payroll takes an advance on the Payrolls tab instead."
+                onClick={() => update((d) => d.localWages.push({
+                  id: uid(), label: 'Paid by hand', amountPkr: 0,
+                }))}>Add</button>
             </EditOnly>
           </div>
           <table>
             <tbody>
-              {result.staff.filter((s) => s.staff.retained).map((s) => (
+              {result.staff.filter((s) => s.paidHerePkr > 0).map((s) => (
                 <tr key={s.staff.id}>
-                  <td>{s.staff.name} <span className="tag-inline">pay</span></td>
-                  <td className="fig mono">{fmtPkr(s.payPkr)}</td>
-                  <td className="muted small">their share of the work</td>
+                  <td>
+                    {s.staff.name}{' '}
+                    {s.staff.retained
+                      ? <span className="tag-inline">you pay them</span>
+                      : <span className="tag-inline">took an advance</span>}
+                  </td>
+                  <td className="fig mono">{fmtPkr(s.paidHerePkr)}</td>
+                  <td className="muted small">
+                    {s.staff.retained
+                      ? (s.drawPkr > 0
+                        ? `their whole pay, plus ${fmtPkr(s.drawPkr)} beyond it`
+                        : 'their share of the work')
+                      : (s.drawPkr > 0
+                        ? `${fmtPkr(s.advanceAgainstPayPkr)} off their pay, ${fmtPkr(s.drawPkr)} beyond it`
+                        : `an advance — ${fmtPkr(s.stillOwedPkr)} of their pay still to come`)}
+                  </td>
                   <td />
                 </tr>
               ))}
@@ -53,7 +67,11 @@ export default function Ledger({ period, result, update }: {
                 </tr>
               ))}
               {!L.localWagesPkr && !period.localWages.length && (
-                <tr><td colSpan={4} className="empty">You have not paid anyone yourself this month.</td></tr>
+                <tr><td colSpan={4} className="empty">
+                  Nobody has been paid or taken anything here this month. To record an
+                  advance, put it under "Taken already" on the Payrolls tab — it comes
+                  off that person's pay first.
+                </td></tr>
               )}
             </tbody>
             {L.localWagesPkr > 0 && (
@@ -87,6 +105,12 @@ export default function Ledger({ period, result, update }: {
             )}
             <div className="row"><dt>Already spent on that side</dt><dd>−{fmtPkr(L.reimbursementsPkr)}</dd></div>
             <div className="row"><dt>You paid it yourself</dt><dd>−{fmtPkr(L.localWagesPkr)}</dd></div>
+            {L.drawsPkr > 0 && (
+              <div className="row muted-row">
+                <dt>of that, taken beyond pay <span className="hint">a draw</span></dt>
+                <dd>{fmtPkr(L.drawsPkr)}</dd>
+              </div>
+            )}
             <div className="row"><dt>Kept back this month</dt><dd>−{fmtPkr(L.withheldPkr)}</dd></div>
             <div className="row"><dt>Already sent</dt><dd>−{fmtPkr(L.transfersPkr)}</dd></div>
             <div className={`row final${negativePkr(L.remainingPkr) ? ' negative' : ''}`}>

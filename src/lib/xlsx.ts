@@ -343,9 +343,16 @@ export function exportWorkbook(periods: Period[], filename: string) {
     for (const o of p.otherPayables) rows.push([`Payable — ${o.label}`, o.amountPkr]);
     rows.push(['Company share', res.totals.companyPkr]);
     rows.push(['Owed this period', res.ledger.transferablePkr]);
+    rows.push(['Money received', res.ledger.receivedPkr]);
     rows.push(['Less reimbursements', -res.ledger.reimbursementsPkr]);
-    for (const w of res.staff.filter((x) => x.staff.retained))
-      rows.push([`Less wages paid here — ${w.staff.name}`, -w.payPkr]);
+    for (const w of res.staff.filter((x) => x.paidHerePkr > 0)) {
+      const how = w.staff.retained
+        ? (w.drawPkr ? `pay in full, plus ${Math.round(w.drawPkr).toLocaleString()} drawn` : 'pay in full')
+        : (w.drawPkr
+          ? `advance ${Math.round(w.advanceAgainstPayPkr).toLocaleString()}, drawn ${Math.round(w.drawPkr).toLocaleString()}`
+          : 'advance on pay');
+      rows.push([`Less wages paid here — ${w.staff.name} (${how})`, -w.paidHerePkr]);
+    }
     for (const w of p.localWages)
       rows.push([`Less wages paid here — ${w.label}`, -w.amountPkr]);
     for (const w of p.withheld) rows.push([`Less held back — ${w.label}`, -w.amountPkr]);
@@ -373,23 +380,28 @@ export function exportPayoutSheet(period: Period) {
     [`Payout register — ${period.label}`],
     [`USD→PKR ${period.usdToPkr}`],
     [],
-    ['Name', 'Share PKR', 'Adjustment PKR', 'Pay PKR', 'Pay USD', 'Settled', 'Breakdown'],
+    ['Name', 'Share PKR', 'Adjustment PKR', 'Pay PKR', 'Pay USD',
+      'Taken PKR', 'Advance PKR', 'Draw PKR', 'Still owed PKR', 'Settled', 'Breakdown'],
   ];
   for (const s of res.staff) {
     const detail = Object.entries(s.byAccount)
       .map(([id, v]) => `${period.accounts.find((a) => a.id === id)?.name ?? id}: ${Math.round(v).toLocaleString()}`)
       .join('; ');
     rows.push([s.staff.name, s.sharePkr, s.staff.adjustmentPkr, s.payPkr, s.payUsd,
+      s.staff.advancePkr, s.advanceAgainstPayPkr, s.drawPkr, s.stillOwedPkr,
       s.staff.retained ? 'Paid here' : 'Remitted', detail]);
   }
-  rows.push(['TOTAL', '', '', res.totals.staffPayPkr, round2(res.totals.staffPayPkr / (period.usdToPkr || 1)), '', '']);
+  rows.push(['TOTAL', '', '', res.totals.staffPayPkr, round2(res.totals.staffPayPkr / (period.usdToPkr || 1)),
+    res.ledger.advancesPkr + res.ledger.drawsPkr, res.ledger.advancesPkr, res.ledger.drawsPkr,
+    sumEntries(res.staff.map((s) => s.stillOwedPkr)), '', '']);
   if (period.localWages.length) {
-    rows.push([], ['Drawn locally, on top of the division']);
-    for (const w of period.localWages) rows.push([w.label, '', '', w.amountPkr, '', 'Paid here', '']);
+    rows.push([], ['Paid here by hand, outside the division']);
+    for (const w of period.localWages) rows.push([w.label, '', '', w.amountPkr, '', '', '', '', '', 'Paid here', '']);
   }
-  rows.push([], ['Paid here in total', '', '', res.ledger.localWagesPkr, '', '', '']);
+  rows.push([], ['Paid here in total', '', '', res.ledger.localWagesPkr, '', '', '', '', '', '', '']);
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 15 }, { wch: 14 }, { wch: 12 }, { wch: 11 }, { wch: 70 }];
+  ws['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 15 }, { wch: 14 }, { wch: 12 },
+    { wch: 12 }, { wch: 13 }, { wch: 11 }, { wch: 15 }, { wch: 11 }, { wch: 70 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Payouts');
   XLSX.writeFile(wb, `Payouts - ${safeFilename(period.label)}.xlsx`);

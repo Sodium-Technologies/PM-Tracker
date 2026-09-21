@@ -48,6 +48,12 @@ export interface StaffMember {
    *  administrator hands it over locally. It is still pay, and still recorded;
    *  it simply never travels. */
   retained: boolean;
+  /** Money this person has already taken this month, in PKR.
+   *
+   *  It comes off their own pay first — an advance on the salary, not extra.
+   *  Only what exceeds their pay for the month is a draw: money taken beyond
+   *  what they earned, which the books have to account for separately. */
+  advancePkr: number;
   notes: string;
 }
 

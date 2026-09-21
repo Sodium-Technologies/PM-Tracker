@@ -23,7 +23,7 @@ export function newAccount(partial: Partial<Account> = {}): Account {
 }
 
 export function newStaff(partial: Partial<StaffMember> = {}): StaffMember {
-  return { id: uid(), name: 'New member', shares: {}, adjustmentPkr: 0, retained: false, notes: '', ...partial };
+  return { id: uid(), name: 'New member', shares: {}, adjustmentPkr: 0, retained: false, advancePkr: 0, notes: '', ...partial };
 }
 
 export function newPeriod(label: string, usdToPkr = 280): Period {
@@ -59,7 +59,8 @@ export function rollForward(period: Period, label?: string): Period {
   const staff = period.staff.map((s) => {
     const shares: Record<string, number> = {};
     for (const [oldId, v] of Object.entries(s.shares)) if (idMap[oldId]) shares[idMap[oldId]] = v;
-    return { ...s, id: uid(), shares, adjustmentPkr: 0 };
+    // What somebody took last month is last month's business.
+    return { ...s, id: uid(), shares, adjustmentPkr: 0, advancePkr: 0 };
   });
   return {
     id: uid(),
@@ -113,6 +114,7 @@ export function normalize(state: AppState): AppState {
       m.shares ??= {};
       m.adjustmentPkr ??= 0;
       m.retained ??= false;
+      m.advancePkr ??= 0;
     }
   }
   if (!state.periods?.some((p) => p.id === state.activePeriodId))

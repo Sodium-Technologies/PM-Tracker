@@ -23,23 +23,29 @@ per period.
    reimbursements, payables outside the matrix, amounts held back, transfers
    already made, and what still has to be remitted.
 
-### Wages paid here
+### Wages paid here, and advances
 
-Some pay never travels: the administrator hands it over locally. Mark a person
-**Paid here** in the payout register and their pay is recorded as a wage, listed
-by name, and taken off what must be remitted — the amount owed to them does not
-change, only the route. *Apply to all periods* sets the same mark on everyone of
-that name in every period, because it is a standing arrangement rather than a
-monthly decision, and it carries forward into each new period.
+Somebody on the payroll can take money during the month. It comes off **their
+own pay first** — it is an advance on the salary, not money on top of it. Enter
+it under **Taken already** on the Payrolls tab, against that person.
 
-The same panel takes free lines for anything drawn on top — a salary, an extra
-share, a top-up. Each is labelled, recorded, and deducted the same way, so the
-ledger always balances:
+From there the split is automatic:
 
-```
-owed = left to send + went straight to the company + you paid it yourself
-       + already spent there + kept back + already sent
-```
+- Taken less than their pay → all of it is an advance. **Still owed** shows what
+  is left of their salary.
+- Taken exactly their pay → the salary is used up, nothing owed, no draw.
+- Taken more than their pay → the excess is a **draw**: money beyond what they
+  earned this month. The row turns and the month carries a warning naming the
+  person and the amount.
+
+Ticking **You pay them** means that person's whole pay is handed over on this
+side, so it never has to be remitted. An advance is then part of that pay, not
+an extra deduction — someone marked this way who has also taken an advance is
+counted once, and only a draw beyond their pay adds to it.
+
+"You paid this yourself" on the Distributions tab is for wages paid by hand to
+somebody with no share of a client. A person on the payroll belongs in **Taken
+already**, so their pay and what they have had of it stay in one place.
 
 ## Working with periods
 

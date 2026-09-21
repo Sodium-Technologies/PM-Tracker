@@ -68,6 +68,15 @@ export interface StaffResult {
   sharePkr: number;
   payPkr: number;
   payUsd: number;
+  /** of what they took, the part that is an advance on this month's pay */
+  advanceAgainstPayPkr: number;
+  /** of what they took, the part beyond this month's pay — a true draw */
+  drawPkr: number;
+  /** pay not yet in their hands: what is still owed after the advance */
+  stillOwedPkr: number;
+  /** what this person costs the local pot: their pay if it is settled here,
+   *  otherwise only what they have taken, plus any draw either way */
+  paidHerePkr: number;
 }
 
 export interface PeriodResult {
@@ -100,7 +109,12 @@ export interface PeriodResult {
     reimbursementsPkr: number;
     /** pay of people whose wages are handed over locally */
     retainedPkr: number;
-    /** retained pay plus anything drawn on top */
+    /** advances: money taken against pay already earned this month */
+    advancesPkr: number;
+    /** money taken beyond the pay earned this month */
+    drawsPkr: number;
+    /** everything settled here: pay handed over locally, advances, draws, and
+     *  any other wage paid on this side */
     localWagesPkr: number;
     withheldPkr: number;
     transfersPkr: number;
@@ -129,7 +143,34 @@ export function computePeriod(period: Period): PeriodResult {
       sharePkr += amount;
     }
     const payPkr = sharePkr + (Number(s.adjustmentPkr) || 0);
-    return { staff: s, byAccount, sharePkr, payPkr, payUsd: rate ? payPkr / rate : 0 };
+    // Money taken comes off this month's pay first. Only what is left over once
+    // the pay is used up is a draw — taking PKR 50,000 against PKR 80,000 of pay
+    // is an advance, and the remaining PKR 30,000 is still owed.
+    const taken = Math.max(0, Number(s.advancePkr) || 0);
+    const earned = Math.max(0, payPkr);
+    let advanceAgainstPayPkr = Math.min(taken, earned);
+    let drawPkr = taken - advanceAgainstPayPkr;
+    // Taking exactly the month's pay leaves a sub-rupee residue behind, and a
+    // fraction of a rupee is not a draw. Fold anything that rounds to nothing
+    // back into the advance, so the two always add up to what was taken.
+    if (Math.round(drawPkr) === 0) {
+      advanceAgainstPayPkr = taken;
+      drawPkr = 0;
+    }
+    // Somebody paid here has their whole pay handed over locally, so an advance
+    // is part of that, not on top of it.
+    const paidHerePkr = (s.retained ? earned : advanceAgainstPayPkr) + drawPkr;
+    return {
+      staff: s,
+      byAccount,
+      sharePkr,
+      payPkr,
+      payUsd: rate ? payPkr / rate : 0,
+      advanceAgainstPayPkr,
+      drawPkr,
+      stillOwedPkr: payPkr - advanceAgainstPayPkr,
+      paidHerePkr,
+    };
   });
 
   const t = {
@@ -151,9 +192,13 @@ export function computePeriod(period: Period): PeriodResult {
   const transfersPkr = sum(period.transfers.map((x) => x.amountPkr));
   const reimbursementsPkr = sum(period.reimbursements.map((r) => r.amountUsd)) * rate;
   const retainedPkr = sum(staff.filter((s) => s.staff.retained).map((s) => s.payPkr));
-  // Wages handed over where the books are kept: the pay of people marked as
-  // settled locally, plus any amount drawn on top (a salary, an extra share).
-  const localWagesPkr = retainedPkr + sum(period.localWages.map((x) => x.amountPkr));
+  const advancesPkr = sum(staff.map((s) => s.advanceAgainstPayPkr));
+  const drawsPkr = sum(staff.map((s) => s.drawPkr));
+  // Wages handed over where the books are kept: what each person has actually
+  // had on this side — their whole pay if it is settled here, otherwise just
+  // what they have taken — plus any other wage paid here by hand.
+  const localWagesPkr =
+    sum(staff.map((s) => s.paidHerePkr)) + sum(period.localWages.map((x) => x.amountPkr));
   // Clients who pay the company's account directly: the whole amount — the
   // team's part and the company's part — is already where it needs to be.
   const directPkr = sum(accounts.filter((a) => a.account.paidDirect).map((a) => a.earnedPkr));
@@ -196,6 +241,15 @@ export function computePeriod(period: Period): PeriodResult {
       warnings.push(`${ar.account.name}: a time entry reads ${problem}`);
     }
   }
+  for (const s of staff) {
+    if (s.drawPkr > 0) {
+      warnings.push(
+        `${s.staff.name} has taken ${fmtPkr(s.staff.advancePkr)} but earned `
+        + `${fmtPkr(s.payPkr)} this month — ${fmtPkr(s.drawPkr)} of it is a draw, `
+        + 'not salary.',
+      );
+    }
+  }
   if (period.accounts.some((a) => a.freelancerPct < 0 || a.freelancerPct > 100))
     warnings.push('An account gives the team less than 0% or more than 100%.');
 
@@ -210,6 +264,8 @@ export function computePeriod(period: Period): PeriodResult {
       directPkr,
       reimbursementsPkr,
       retainedPkr,
+      advancesPkr,
+      drawsPkr,
       localWagesPkr,
       withheldPkr,
       transfersPkr,
