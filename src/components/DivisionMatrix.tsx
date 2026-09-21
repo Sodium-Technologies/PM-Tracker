@@ -52,7 +52,7 @@ export default function DivisionMatrix({ period, result, update, onApplyPaidHere
           <thead>
             <tr>
               <th>Person</th>
-              <th className="fig">Change by hand</th>
+              <th className="fig" title="A correction on this person's pay, in PKR. Added on top of their share of the clients; may be negative.">Adjustment</th>
               <th className="fig">They get</th>
               <th className="fig" title="Money this person has already taken this month. It comes off their pay first; anything beyond it is a draw.">Taken already</th>
               <th className="fig">Still owed</th>
