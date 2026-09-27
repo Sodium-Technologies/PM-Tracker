@@ -172,12 +172,15 @@ begin
   new.updated_at := now();
   new.updated_by := coalesce(auth.jwt() ->> 'email', new.updated_by);
   -- The owner is stamped from the signed-in address, never taken from the
-  -- request, and never changes hands afterwards. Otherwise anyone could claim a
-  -- private month by writing someone else's address into it — or their own.
+  -- request, so nobody can claim a private month by writing someone else's
+  -- address into it — or their own. An owner that is already set never changes
+  -- hands; one that is missing can still be filled, or a month left ownerless by
+  -- an older version could never be claimed by anybody and would be lost to
+  -- everyone the moment it was marked private.
   if tg_op = 'INSERT' then
     new.owner_email := coalesce(auth.jwt() ->> 'email', new.owner_email);
   else
-    new.owner_email := old.owner_email;
+    new.owner_email := coalesce(old.owner_email, auth.jwt() ->> 'email', new.owner_email);
   end if;
   return new;
 end
@@ -208,7 +211,8 @@ select email, role, created_at from public.app_users order by created_at;
 -- unreachable the moment it was marked private. This names the first
 -- administrator as the owner of every month that has none. It reads the address
 -- from the table rather than from auth.jwt(), because the SQL editor runs as the
--- project, not as you, and auth.jwt() is empty there.
+-- project, not as you, and auth.jwt() is empty there — and the trigger above
+-- lets a missing owner be filled, so this statement is not written back out.
 update public.periods p
 set owner_email = (
   select u.email from public.app_users u

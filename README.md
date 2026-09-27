@@ -79,6 +79,12 @@ Re-run `supabase/schema.sql` after updating — it adds the two columns and the
 policies, and claims every existing month for the first administrator, so none
 of them become unreachable the first time one is marked private.
 
+The books live in the database, not in the browser. If the month list is empty
+after signing in, the months were never uploaded rather than lost: load a backup
+from **Settings → Load a sheet** and it writes every month up. Save a backup
+after any large change — it is the only copy that does not depend on the
+project.
+
 ### Undo
 
 Everything that changes the books records the state it replaced. **Undo** then
