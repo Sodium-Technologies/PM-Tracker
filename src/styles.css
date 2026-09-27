@@ -843,7 +843,13 @@ td.mid { text-align: center; }
 .settings-actions .btn.wide { justify-content: center; }
 .settings-note { margin: 0 0 12px; font-size: 12px; color: var(--ink-soft); }
 
-/* Undo only appears once there is something to undo, so it should read as an
-   offer rather than as furniture. */
-.btn.undo { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.btn.undo:hover { background: var(--accent-wash); }
+/* Undo only appears once there is something to undo, so it can afford to be the
+   loudest thing in the bar: it is always the most useful button there when it is
+   there at all. */
+.btn.undo {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.btn.undo:hover { background: color-mix(in srgb, var(--accent) 86%, #000); }
