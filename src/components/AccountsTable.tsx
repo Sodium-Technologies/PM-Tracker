@@ -1,5 +1,4 @@
 import type { Account, Period } from '../lib/types';
-import { STATUS_OPTIONS } from '../lib/types';
 import { fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
 import { hoursAsText } from '../lib/time';
 import { EditOnly, EntriesInput, NumberInput, OptionalNumberInput, TextInput } from './Fields';
@@ -41,21 +40,18 @@ export default function AccountsTable({ result, update, timeFormat }: {
           <thead>
             <tr>
               <th>Client</th>
-              <th>Looked after by</th>
               <th className="fig">Rate</th>
               <th>Time worked</th>
               <th className="fig">Total time</th>
               <th className="fig">Before fee</th>
               <th className="fig">Fee</th>
-              <th className="fig">One-off +/−</th>
+              <th className="fig" title="A correction after the fee — a refund, a bonus, a true-up">Adjustment</th>
               <th className="fig" title="What the work is worth, whether or not it has been paid">Estimated</th>
               <th className="fig" title="What the client has actually sent. Left blank it follows the status: the full estimate once marked received, nothing before that. Type a figure for a part payment.">Received</th>
               <th className="fig" title="Estimated, less received">Outstanding</th>
               <th className="fig">In PKR</th>
-              <th className="fig">Team %</th>
               <th className="fig">Team gets</th>
               <th className="fig">Company gets</th>
-              <th>Money in?</th>
               <th title="The client pays the company's account directly, so this money never reaches you">Straight to company</th>
               <th />
             </tr>
@@ -69,7 +65,6 @@ export default function AccountsTable({ result, update, timeFormat }: {
                     <TextInput value={a.name} onChange={(v) => patch(a.id, { name: v })} />
                     {a.notes && <span className="sub">{a.notes}</span>}
                   </td>
-                  <td className="owner"><TextInput value={a.owner} onChange={(v) => patch(a.id, { owner: v })} /></td>
                   <td className="fig">
                     <span className="unit">
                       <NumberInput value={a.rate} onChange={(v) => patch(a.id, { rate: v })} width={64} />
@@ -109,21 +104,8 @@ export default function AccountsTable({ result, update, timeFormat }: {
                     {r.outstandingUsd > 0.005 ? fmtUsd(r.outstandingUsd) : '—'}
                   </td>
                   <td className="fig mono">{fmtPkr(r.earnedPkr)}</td>
-                  <td className="fig">
-                    <NumberInput value={a.freelancerPct} onChange={(v) => patch(a.id, { freelancerPct: v })} width={48} unit="%" />
-                  </td>
                   <td className="fig mono">{fmtPkr(r.freelancerPkr)}</td>
                   <td className="fig mono">{fmtPkr(r.companyPkr)}</td>
-                  <td>
-                    <select
-                      disabled={!canEdit}
-                      className={`pill s-${a.status.replace(/\s+/g, '-').toLowerCase()}`}
-                      value={STATUS_OPTIONS.includes(a.status) ? a.status : 'Pending'}
-                      onChange={(e) => patch(a.id, { status: e.target.value })}
-                    >
-                      {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </td>
                   <td className="mid">
                     <label className="check" title="The client pays the company's account directly">
                       <input type="checkbox" checked={a.paidDirect} disabled={!canEdit}
@@ -144,12 +126,12 @@ export default function AccountsTable({ result, update, timeFormat }: {
               );
             })}
             {!result.accounts.length && (
-              <tr><td colSpan={18} className="empty">No clients yet — add one, or load a sheet.</td></tr>
+              <tr><td colSpan={14} className="empty">No clients yet — add one, or load a sheet.</td></tr>
             )}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={5}>{result.accounts.length} clients</td>
+              <td colSpan={4}>{result.accounts.length} clients</td>
               <td className="fig mono">{fmtUsd(t.grossUsd)}</td>
               <td className="fig mono">{fmtUsd(t.feeUsd)}</td>
               <td />
@@ -159,10 +141,9 @@ export default function AccountsTable({ result, update, timeFormat }: {
                 {t.outstandingUsd > 0.005 ? fmtUsd(t.outstandingUsd) : '—'}
               </td>
               <td className="fig mono">{fmtPkr(t.earnedPkr)}</td>
-              <td />
               <td className="fig mono">{fmtPkr(t.freelancerPkr)}</td>
               <td className="fig mono">{fmtPkr(t.companyPkr)}</td>
-              <td colSpan={3} />
+              <td colSpan={2} />
             </tr>
           </tfoot>
         </table>

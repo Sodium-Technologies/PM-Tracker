@@ -3,6 +3,7 @@ import { fmtPkr, negativePkr, round2, type PeriodResult } from '../lib/calc';
 import { EditOnly, NumberInput, TextInput } from './Fields';
 import { useCanEdit } from '../lib/access';
 import { uid } from '../lib/state';
+import React from 'react';
 
 type Update = (fn: (p: Period) => void) => void;
 
@@ -19,10 +20,11 @@ export default function Ledger({ period, result, update }: {
           <div className="panel-head">
             <h2>You paid this yourself <span className="hint">so it does not need sending</span></h2>
             <EditOnly>
-              <button className="btn" title="Somebody with no share of a client. A person on the payroll takes an advance on the Payrolls tab instead."
+              <PayPerson period={period} result={result} update={update} />
+              <button className="btn" title="Somebody with no share of a client"
                 onClick={() => update((d) => d.localWages.push({
                   id: uid(), label: 'Paid by hand', amountPkr: 0,
-                }))}>Add</button>
+                }))}>Someone else</button>
             </EditOnly>
           </div>
           <table>
@@ -201,6 +203,49 @@ export default function Ledger({ period, result, update }: {
         </section>
       </div>
     </div>
+  );
+}
+
+/** Hand money to somebody on the payroll. It goes into their Taken already, so
+ *  it comes off their own pay first and only the excess counts as a draw — the
+ *  same rule whether it is entered here or on the Payrolls tab. */
+function PayPerson({ period, result, update }: {
+  period: Period; result: PeriodResult; update: Update;
+}) {
+  const [who, setWho] = React.useState('');
+  const [amount, setAmount] = React.useState('');
+
+  const give = () => {
+    const paid = parseFloat(amount);
+    if (!who || !Number.isFinite(paid) || !paid) return;
+    update((d) => {
+      const m = d.staff.find((x) => x.id === who);
+      if (m) m.advancePkr = (Number(m.advancePkr) || 0) + paid;
+    });
+    setWho('');
+    setAmount('');
+  };
+
+  if (!period.staff.length) return null;
+  return (
+    <span className="pay-person">
+      <select className="cell-input" aria-label="Pay someone on the payroll"
+        value={who} onChange={(e) => setWho(e.target.value)}>
+        <option value="">Pay a person…</option>
+        {result.staff.map((s) => (
+          <option key={s.staff.id} value={s.staff.id}>{s.staff.name}</option>
+        ))}
+      </select>
+      {who && (
+        <>
+          <input className="cell-input num" style={{ width: 88 }} type="number" step="any"
+            aria-label="Amount paid" placeholder="PKR" value={amount} autoFocus
+            onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') give(); }} />
+          <button className="btn" onClick={give}>Add</button>
+        </>
+      )}
+    </span>
   );
 }
 

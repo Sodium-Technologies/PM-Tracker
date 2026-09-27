@@ -54,9 +54,9 @@ export function OptionalNumberInput({ value, onChange, placeholder, width = 78, 
   );
 }
 
-export function NumberInput({ id, value, onChange, unit, width = 72, step = 'any' }: {
+export function NumberInput({ id, value, onChange, unit, width = 72, step = 'any', label }: {
   id?: string; value: number; onChange: (v: number) => void;
-  unit?: string; width?: number; step?: string;
+  unit?: string; width?: number; step?: string; label?: string;
 }) {
   const canEdit = useCanEdit();
   const [draft, setDraft] = React.useState<string | null>(null);
@@ -69,6 +69,7 @@ export function NumberInput({ id, value, onChange, unit, width = 72, step = 'any
         style={{ width, minWidth: width }}
         type="number"
         step={step}
+        aria-label={label}
         readOnly={!canEdit}
         value={shown}
         onChange={(e) => {

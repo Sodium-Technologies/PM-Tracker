@@ -187,13 +187,20 @@ const samplePeriod = {
   ok('viewer sees the shared period', (await page.locator('.period-name').inputValue()) === 'September 2026');
   ok('viewer is labelled view only', (await page.locator('.role').innerText()).trim() === 'Can look');
   ok('viewer gets no New period button', (await page.getByRole('button', { name: 'Start a new month' }).count()) === 0);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.waitForTimeout(300);
   ok('viewer gets no Import button', (await page.getByRole('button', { name: /Load a sheet/ }).count()) === 0);
+  ok('viewer can still save a backup', (await page.getByRole('button', { name: 'Save a backup' }).count()) === 1);
+  ok('viewer gets no access panel from settings', (await page.locator('#grant-email').count()) === 0);
+  await page.getByRole('button', { name: /Back to/ }).click();
+  await page.waitForTimeout(300);
   ok('viewer gets no Delete button', (await page.getByRole('button', { name: 'Delete' }).count()) === 0);
-  ok('viewer gets no way in to access', (await page.getByRole('button', { name: 'Who can open this' }).count()) === 0);
+  ok('viewer is not offered undo', (await page.getByRole('button', { name: /^Undo/ }).count()) === 0);
   ok('viewer sees the view-only badge', await page.locator('.readonly-badge').isVisible());
   ok('viewer lands on the summary', (await page.locator('.tab.active').innerText()) === 'Summary');
   ok('the summary stays on this month only', (await page.locator('.chart').count()) === 0);
-  ok('the analysis sits outside the months', (await page.locator('.rail-nav .rail-link').innerText()) === 'Dashboard');
+  ok('the analysis sits outside the months',
+     (await page.locator('.rail-nav .rail-link').allInnerTexts()).join('|') === 'Dashboard|Settings');
   ok('the month tabs carry no analysis',
     (await page.locator('.tab').allInnerTexts()).join('|') === 'Summary|Revenue|Payrolls|Distributions');
   await page.getByRole('button', { name: 'Revenue' }).click();
@@ -214,7 +221,11 @@ const samplePeriod = {
   const { page, ctx } = await open({ email: 'editor@company.com', role: 'editor', periods: [samplePeriod] });
   ok('editor is labelled can edit', (await page.locator('.role').innerText()).trim() === 'Can change');
   ok('editor gets New period', (await page.getByRole('button', { name: 'Start a new month' }).count()) === 1);
-  ok('editor gets no way in to access', (await page.getByRole('button', { name: 'Who can open this' }).count()) === 0);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.waitForTimeout(300);
+  ok('editor gets no access panel', (await page.locator('#grant-email').count()) === 0);
+  await page.getByRole('button', { name: /Back to/ }).click();
+  await page.waitForTimeout(300);
   await page.getByRole('button', { name: 'Revenue' }).click();
   await page.waitForTimeout(300);
   const rate = page.locator('table tbody tr').first().locator('input').nth(2);
@@ -226,10 +237,11 @@ const samplePeriod = {
 {
   const { page, ctx, errors } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod] });
   ok('administrator is labelled administrator', (await page.locator('.role').innerText()).trim() === 'Runs it');
-  ok('administrator gets the access panel', (await page.getByRole('button', { name: 'Who can open this' }).count()) === 1);
-  await page.getByRole('button', { name: 'Who can open this' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
   await page.waitForTimeout(400);
-  ok('access tab offers to add someone', await page.locator('#grant-email').isVisible());
+  ok('administrator gets the access panel in settings', await page.locator('#grant-email').isVisible());
+  ok('settings offers loading a sheet', (await page.getByRole('button', { name: /Load a sheet/ }).count()) === 1);
+  ok('settings offers saving a backup', (await page.getByRole('button', { name: 'Save a backup' }).count()) === 1);
   ok('access tab lists the three levels',
     (await page.locator('.settle .row').count()) === 3,
     (await page.locator('.settle dt').allInnerTexts()).join(', '));

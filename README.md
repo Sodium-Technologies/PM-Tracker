@@ -48,11 +48,23 @@ zero means "nothing has come in, and I mean it".
 
 Only realised revenue counts towards what is left to send — see below.
 
+### Undo
+
+Everything that changes the books records the state it replaced, so the **Undo**
+button in the rail puts it back, one step at a time. A burst of the same kind of
+change — typing into one box — collapses into a single step, or undo would walk
+back through the letters of a name.
+
+The history lives only as long as the page is open. It is a way out of a mistake
+just made, not a record of the month; a backup is that.
+
 ### Wages paid here, and advances
 
 Somebody on the payroll can take money during the month. It comes off **their
 own pay first** — it is an advance on the salary, not money on top of it. Enter
-it under **Taken already** on the Payrolls tab, against that person.
+it under **Taken already** on the Payrolls tab, against that person, or hand it
+to them from **You paid this yourself** on the Distributions tab: pick the
+person, type the amount, and it lands in the same place.
 
 From there the split is automatic:
 

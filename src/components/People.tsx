@@ -48,7 +48,7 @@ export default function People({ me, onChanged }: { me: string | null; onChanged
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Who can open this <span className="hint">one email address each</span></h2>
+        <h2>Access <span className="hint">who can open the books — one email address each</span></h2>
       </div>
 
       <form className="grant" onSubmit={add}>

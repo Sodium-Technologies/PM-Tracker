@@ -52,8 +52,8 @@ export default function DivisionMatrix({ period, result, update, onApplyPaidHere
           <thead>
             <tr>
               <th>Person</th>
-              <th className="fig" title="A correction on this person's pay, in PKR. Added on top of their share of the clients; may be negative.">Adjustment</th>
               <th className="fig">They get</th>
+              <th className="fig">In USD</th>
               <th className="fig" title="Money this person has already taken this month. It comes off their pay first; anything beyond it is a draw.">Taken already</th>
               <th className="fig">Still owed</th>
               <th title="You hand this person their pay yourself, so it does not need sending">You pay them</th>
@@ -76,15 +76,11 @@ export default function DivisionMatrix({ period, result, update, onApplyPaidHere
                     const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.name = v;
                   })} />
                 </td>
-                <td className="fig">
-                  <NumberInput value={s.staff.adjustmentPkr} width={78}
-                    onChange={(v) => update((d) => {
-                      const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.adjustmentPkr = v;
-                    })} />
-                </td>
-                <td className="fig mono total" title={fmtUsd(s.payUsd)}>{fmtPkr(s.payPkr)}</td>
+                <td className="fig mono total">{fmtPkr(s.payPkr)}</td>
+                <td className="fig mono sub-fig">{fmtUsd(s.payUsd)}</td>
                 <td className="fig">
                   <NumberInput value={s.staff.advancePkr} width={78}
+                    label={`Taken already by ${s.staff.name}`}
                     onChange={(v) => update((d) => {
                       const m = d.staff.find((x) => x.id === s.staff.id); if (m) m.advancePkr = v;
                     })} />
@@ -132,8 +128,8 @@ export default function DivisionMatrix({ period, result, update, onApplyPaidHere
           <tfoot>
             <tr>
               <td>Shared out</td>
-              <td />
               <td className="fig mono">{fmtPkr(result.totals.staffPayPkr)}</td>
+              <td className="fig mono sub-fig">{fmtUsd(result.totals.staffPayPkr / (period.usdToPkr || 1))}</td>
               <td className="fig mono">{fmtPkr(result.ledger.advancesPkr + result.ledger.drawsPkr)}</td>
               <td className="fig mono">{fmtPkr(sum(result.staff.map((s) => s.stillOwedPkr)))}</td>
               <td />

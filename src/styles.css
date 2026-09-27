@@ -835,3 +835,10 @@ td.mid { text-align: center; }
 
 
 .link.tiny { font-size: 10.5px; margin-left: 6px; }
+
+.pay-person { display: inline-flex; gap: 6px; align-items: center; }
+.pay-person select.cell-input { width: auto; min-width: 0; font-size: 12px; }
+
+.settings-actions { padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.settings-actions .btn.wide { justify-content: center; }
+.settings-note { margin: 0 0 12px; font-size: 12px; color: var(--ink-soft); }

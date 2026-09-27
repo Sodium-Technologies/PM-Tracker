@@ -20,9 +20,10 @@ import SignIn from './components/SignIn';
 import { NumberInput } from './components/Fields';
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
-/** The app has two places to stand: the whole business (Dashboard, and who can
- *  open the books), or one month. Tabs belong to a month and never leave it. */
-type View = 'dashboard' | 'month' | 'access';
+/** The app has three places to stand: the whole business (Dashboard), one month,
+ *  or the settings that belong to neither. Tabs belong to a month and never
+ *  leave it. */
+type View = 'dashboard' | 'month' | 'settings';
 type Tab = 'overview' | 'revenue' | 'division' | 'payouts';
 
 export default function App() {
@@ -58,6 +59,45 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
     setView('month');
   };
   const [toast, setToast] = React.useState('');
+
+  /** One step back, and then another. Every change that touches the books
+   *  records the state it replaced, so it can be put back exactly.
+   *
+   *  A burst of the same kind of change — typing into one box — collapses into a
+   *  single step, or undo would walk back through the letters of a name one at a
+   *  time. The history lives only as long as the page is open: it is a way out of
+   *  a mistake just made, not a record of the month. */
+  const past = React.useRef<{ state: AppState; label: string }[]>([]);
+  const latest = React.useRef(state);
+  const lastAt = React.useRef(0);
+  const [undoable, setUndoable] = React.useState<string | null>(null);
+  React.useEffect(() => { latest.current = state; }, [state]);
+
+  const remember = (label: string) => {
+    const now = Date.now();
+    const top = past.current[past.current.length - 1];
+    const sameBurst = top && top.label === label && now - lastAt.current < 1200;
+    if (!sameBurst) {
+      past.current.push({ state: latest.current, label });
+      if (past.current.length > 50) past.current.shift();
+    }
+    lastAt.current = now;
+    setUndoable(past.current[past.current.length - 1]?.label ?? null);
+  };
+
+  const undo = async () => {
+    const step = past.current.pop();
+    if (!step) return;
+    setState(step.state);
+    latest.current = step.state;
+    lastAt.current = 0;
+    setUndoable(past.current[past.current.length - 1]?.label ?? null);
+    setToast(`Undid ${step.label}`);
+    if (cloudEnabled) {
+      const { error } = await cloud.uploadPeriods(step.state.periods);
+      if (error) setToast(`Undone here, but not shared: ${error}`);
+    }
+  };
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => { if (!cloudEnabled) saveState(state); }, [state]);
@@ -109,6 +149,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
   const update = (fn: (p: Period) => void) => {
     if (!canEdit) return;
+    remember('that change');
     setState((s) => ({
       ...s,
       periods: s.periods.map((p) => {
@@ -132,6 +173,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
   };
 
   const addPeriod = async () => {
+    remember('starting a month');
     const p = period.accounts.length ? rollForward(period) : newPeriod(defaultLabel(), period.usdToPkr);
     setState((s) => ({ ...s, periods: [...s.periods, p], activePeriodId: p.id }));
     setToast(period.accounts.length ? `${p.label} started from ${period.label}` : `Created ${p.label}`);
@@ -139,6 +181,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
   };
 
   const duplicatePeriod = async () => {
+    remember('duplicating a month');
     const p = { ...clone(period), id: uid(), label: `${period.label} (copy)` };
     setState((s) => ({ ...s, periods: [...s.periods, p], activePeriodId: p.id }));
     setToast(`Duplicated ${period.label}`);
@@ -147,7 +190,8 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
   const deletePeriod = async () => {
     if (state.periods.length === 1) return;
-    if (!confirm(`Delete ${period.label}? This cannot be undone.`)) return;
+    if (!confirm(`Delete ${period.label}?`)) return;
+    remember('deleting a month');
     const removing = period.id;
     setState((s) => {
       const at = s.periods.findIndex((p) => p.id === period.id);
@@ -167,6 +211,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
       if (file.name.endsWith('.json')) {
         const restored = normalize(JSON.parse(await file.text()) as AppState);
         if (!restored.periods?.length) throw new Error('no periods in that backup');
+        remember('loading a backup');
         setState(restored);
         setToast(`Restored ${restored.periods.length} months from the backup`);
         if (cloudEnabled) {
@@ -177,6 +222,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
       }
       const periods = await importWorkbook(file);
       if (!periods.length) { setToast('That file has no payroll months in it'); return; }
+      remember('loading a sheet');
       setState((s) => ({
         ...s,
         // An untouched starter period is scaffolding, not data — drop it once
@@ -202,6 +248,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
       period.staff.filter((m) => m.retained).map((m) => m.name.trim().toLowerCase()),
     );
     if (!names.size) { setToast('Nobody is marked as paid here yet'); return; }
+    remember('applying who you pay yourself');
 
     const changed: Period[] = [];
     setState((s) => ({
@@ -256,6 +303,8 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <nav className="rail-nav">
           <button className={`rail-link${view === 'dashboard' ? ' active' : ''}`}
             onClick={() => setView('dashboard')}>Dashboard</button>
+          <button className={`rail-link${view === 'settings' ? ' active' : ''}`}
+            onClick={() => setView('settings')}>Settings</button>
         </nav>
 
         <div className="rail-label">Months</div>
@@ -283,15 +332,11 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           {canEdit && <button className="btn wide primary" onClick={addPeriod}>Start a new month</button>}
           <input ref={fileRef} id="import-file" type="file" accept=".xlsx,.xls,.csv,.json" hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
-          {canEdit && (
-            <button className="btn wide" onClick={() => fileRef.current?.click()}>Load a sheet or backup</button>
-          )}
           <button className="btn wide" onClick={exportExcel}>Download as Excel</button>
-          <button className="btn wide" onClick={backup}>Save a backup</button>
-          {auth.isSuperAdmin && (
-            <button className={`btn wide${view === 'access' ? ' primary' : ''}`}
-              onClick={() => setView(view === 'access' ? 'month' : 'access')}>
-              Who can open this
+          {canEdit && (
+            <button className="btn wide" onClick={undo} disabled={!undoable}
+              title={undoable ? `Undo ${undoable}` : 'Nothing to undo yet'}>
+              {undoable ? `Undo ${undoable}` : 'Undo'}
             </button>
           )}
         </div>
@@ -334,15 +379,40 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           </>
         )}
 
-        {view === 'access' && auth.isSuperAdmin && (
+        {view === 'settings' && (
           <>
             <header className="head">
-              <h1 className="view-name">Who can open this</h1>
+              <h1 className="view-name">Settings</h1>
               <div className="spacer" />
               <button className="btn" onClick={() => setView('month')}>Back to {period.label}</button>
             </header>
             <div className="sheet">
-              <People me={auth.email} onChanged={auth.refreshRole} />
+              <div className="overview">
+                <section className="panel">
+                  <div className="panel-head"><h2>The books</h2></div>
+                  <div className="settings-actions">
+                    {canEdit && (
+                      <button className="btn wide" onClick={() => fileRef.current?.click()}>
+                        Load a sheet
+                      </button>
+                    )}
+                    <p className="settings-note">
+                      An Excel mastersheet or a backup file. Months in it are added to the ones
+                      already here.
+                    </p>
+                    <button className="btn wide" onClick={backup}>Save a backup</button>
+                    <p className="settings-note">
+                      Every month, as one file. Keep one before switching devices.
+                    </p>
+                  </div>
+                </section>
+
+                {auth.isSuperAdmin && (
+                  <div className="span-2">
+                    <People me={auth.email} onChanged={auth.refreshRole} />
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}
