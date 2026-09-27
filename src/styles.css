@@ -867,3 +867,35 @@ select.seen-public { border-color: var(--accent); color: var(--accent); }
   border-radius: 999px;
   padding: 3px 9px;
 }
+
+/* ---------- the pinned name column ---------- */
+/* Scrolled right, a row of figures with no name against it is unreadable. The
+   first column stays put.
+   Two things a sticky cell demands. Its background must be opaque, or whatever
+   slides underneath shows straight through it — so the hover tint is mixed into
+   the surface rather than laid over it at 8% alpha. And a cell that spans
+   columns must not be pinned at all: the footer's label spans four, and pinning
+   it would park a four-column block over the figures. */
+.scroll table th:first-child:not([colspan]),
+.scroll table td:first-child:not([colspan]) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+.scroll table thead th:first-child:not([colspan]) { z-index: 3; }
+.scroll table tbody tr:hover td:first-child:not([colspan]) {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+/* The edge of the pinned column. */
+.scroll table th:first-child:not([colspan])::after,
+.scroll table td:first-child:not([colspan])::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--rule-strong);
+}

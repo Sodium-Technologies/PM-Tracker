@@ -51,7 +51,7 @@ export default function DivisionMatrix({ period, result, update, onApplyPaidHere
         <table>
           <thead>
             <tr>
-              <th>Person</th>
+              <th>Team member</th>
               <th className="fig">They get</th>
               <th className="fig">In USD</th>
               <th className="fig" title="Money this person has already taken this month. It comes off their pay first; anything beyond it is a draw.">Taken already</th>
