@@ -50,8 +50,14 @@ Only realised revenue counts towards what is left to send — see below.
 
 ### Undo
 
-Everything that changes the books records the state it replaced, so the **Undo**
-button in the rail puts it back, one step at a time. A burst of the same kind of
+Everything that changes the books records the state it replaced. **Undo** then
+appears next to Duplicate and Delete at the top of the month, naming what it
+will undo — "Undo that change", "Undo starting a month" — and puts it back a
+step at a time. **Ctrl+Z** (**⌘Z** on a Mac) does the same, except while the
+cursor is in a box, where it stays the browser's own undo.
+
+It is only there when there is something to undo, so an empty one never sits
+around looking broken. A burst of the same kind of
 change — typing into one box — collapses into a single step, or undo would walk
 back through the letters of a name.
 

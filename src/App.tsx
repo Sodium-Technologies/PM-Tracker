@@ -119,6 +119,21 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
     return () => { cancelled = true; };
   }, [hadSaved]);
   React.useEffect(() => {
+    if (!canEdit) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        // Leave the browser's own undo alone while someone is mid-edit in a box.
+        const el = document.activeElement as HTMLElement | null;
+        if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+        e.preventDefault();
+        void undo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  React.useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(''), 4000);
     return () => clearTimeout(t);
@@ -333,12 +348,6 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           <input ref={fileRef} id="import-file" type="file" accept=".xlsx,.xls,.csv,.json" hidden
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
           <button className="btn wide" onClick={exportExcel}>Download as Excel</button>
-          {canEdit && (
-            <button className="btn wide" onClick={undo} disabled={!undoable}
-              title={undoable ? `Undo ${undoable}` : 'Nothing to undo yet'}>
-              {undoable ? `Undo ${undoable}` : 'Undo'}
-            </button>
-          )}
         </div>
 
         {cloudEnabled ? (
@@ -440,6 +449,11 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
               <div className="spacer" />
               {canEdit ? (
                 <>
+                  {undoable && (
+                    <button className="btn undo" onClick={undo} title={`Undo ${undoable} — Ctrl+Z`}>
+                      ↩ Undo {undoable}
+                    </button>
+                  )}
                   <button className="btn" onClick={duplicatePeriod}>Duplicate</button>
                   <button className="btn" onClick={deletePeriod} disabled={state.periods.length === 1}>Delete</button>
                 </>
