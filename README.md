@@ -79,6 +79,13 @@ Re-run `supabase/schema.sql` after updating — it adds the two columns and the
 policies, and claims every existing month for the first administrator, so none
 of them become unreachable the first time one is marked private.
 
+If saving then reports *"Could not find the 'visibility' column of 'periods' in
+the schema cache"*, the column exists but Supabase's API layer has not noticed
+it. Run `notify pgrst, 'reload schema';` and reload. The app does not depend on
+it either way: a write rejected for that reason is repeated without the column,
+because the books matter more than the setting — the setting still travels
+inside the month itself and takes effect once the cache catches up.
+
 The books live in the database, not in the browser. If the month list is empty
 after signing in, the months were never uploaded rather than lost: load a backup
 from **Settings → Load a sheet** and it writes every month up. Save a backup

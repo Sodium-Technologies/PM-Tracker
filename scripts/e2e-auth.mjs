@@ -47,7 +47,7 @@ const session = (email) => ({
 /** Open the app with Supabase stubbed: `role` null means "not on the list".
  *  `down: true` makes every call to the project fail, as an unreachable or
  *  paused project does. */
-async function open({ email, role, periods = [], down = false, path = '', installed = false }) {
+async function open({ email, role, periods = [], down = false, path = '', installed = false, oldSchema = false, writes = [] }) {
   const ctx = await browser.newContext();
   // iOS reports a home-screen app through navigator.standalone; the app reads it
   // to decide that a sign-in link cannot possibly work here.
@@ -87,7 +87,30 @@ async function open({ email, role, periods = [], down = false, path = '', instal
       return json(role ? [{ email, role, created_at: '2026-01-01' }] : []);
     }
     if (url.includes('/rest/v1/periods')) {
-      if (route.request().method() !== 'GET') return json([]);
+      if (route.request().method() !== 'GET') {
+        // Stand in for a project that has not run the latest schema: the first
+        // write, carrying `visibility`, is rejected the way PostgREST rejects it.
+        const body = route.request().postData() ?? '';
+        // The column is a top-level key of the row. The word also appears inside
+        // `data`, which PostgREST neither sees nor objects to.
+        const sendsColumn = (() => {
+          try {
+            return JSON.parse(body)
+              .some((row) => Object.prototype.hasOwnProperty.call(row, 'visibility'));
+          } catch { return false; }
+        })();
+        if (oldSchema && sendsColumn) {
+          return route.fulfill({
+            status: 400, contentType: 'application/json',
+            body: JSON.stringify({
+              code: 'PGRST204',
+              message: "Could not find the 'visibility' column of 'periods' in the schema cache",
+            }),
+          });
+        }
+        writes.push(body);
+        return json([]);
+      }
       return json(periods.map((p) => ({
         id: p.id, label: p.label, data: p,
         visibility: p.visibility ?? 'core', owner_email: 'nav8khan@gmail.com',
@@ -104,6 +127,7 @@ async function open({ email, role, periods = [], down = false, path = '', instal
     }, session(email));
   }
   const page = await ctx.newPage();
+  ctx.__writes = writes;
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(ORIGIN + path, { waitUntil: 'networkidle' });
@@ -171,6 +195,32 @@ const samplePeriod = {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForTimeout(900);
   ok('an installed app signs itself in', (await page.locator('#signin-code').count()) === 0);
+  await ctx.close();
+}
+
+// 1c. a project that has not run the latest schema still saves the books
+{
+  const writes = [];
+  const { page, ctx } = await open({
+    email: 'editor@company.com', role: 'editor', periods: [samplePeriod], oldSchema: true, writes,
+  });
+  await page.getByRole('button', { name: 'Revenue' }).click();
+  await page.waitForTimeout(300);
+  const rate = page.locator('table tbody tr').first().locator('input').nth(1);
+  await rate.fill('99');
+  await page.waitForTimeout(1500);
+  // The retry drops the column but keeps the setting inside `data`, so the test
+  // has to look at the row's own keys rather than for the word.
+  const sentColumn = (body) => {
+    try { return JSON.parse(body).some((row) => Object.prototype.hasOwnProperty.call(row, 'visibility')); }
+    catch { return false; }
+  };
+  ok('a write rejected for the missing column is repeated without it',
+     writes.length > 0 && writes.every((w) => !sentColumn(w)), `${writes.length} write(s) got through`);
+  ok('and the setting still travels inside the month itself',
+     writes.some((w) => w.includes('"visibility"')));
+  ok('and the books are not reported as lost',
+     !/Not saved/.test(await page.locator('body').innerText()));
   await ctx.close();
 }
 

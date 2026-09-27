@@ -26,6 +26,25 @@ const rowFor = (p: Period) => ({
   visibility: p.visibility ?? 'core',
 });
 
+/** True when the project has not been given the visibility column, or its API
+ *  layer has not noticed it yet. Never a reason to lose somebody's work: the
+ *  books matter more than the setting, so the write is repeated without it. */
+const missingVisibility = (message?: string) =>
+  !!message && /visibility/i.test(message) && /column|schema cache/i.test(message);
+
+async function upsertRows(rows: ReturnType<typeof rowFor>[]): Promise<{ error?: string }> {
+  if (!supabase) return {};
+  const { error } = await supabase.from('periods').upsert(rows, { onConflict: 'id' });
+  if (!error) return {};
+  if (!missingVisibility(error.message)) return { error: error.message };
+  const retry = await supabase
+    .from('periods')
+    .upsert(rows.map(({ visibility: _drop, ...rest }) => rest), { onConflict: 'id' });
+  return retry.error
+    ? { error: retry.error.message }
+    : { error: undefined };
+}
+
 const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
 
 /** Chronological where the label names a month, stable otherwise. */
@@ -52,7 +71,11 @@ export function stateFrom(periods: Period[], activeId?: string): AppState {
 
 export async function fetchPeriods(): Promise<{ periods: Period[]; error?: string }> {
   if (!supabase) return { periods: [] };
-  const { data, error } = await supabase.from('periods').select('id,label,data,visibility,owner_email');
+  let { data, error } = await supabase.from('periods').select('id,label,data,visibility,owner_email');
+  // A project that has not run the latest schema has no such columns to select.
+  if (error && missingVisibility(error.message)) {
+    ({ data, error } = await supabase.from('periods').select('id,label,data'));
+  }
   if (error) return { periods: [], error: error.message };
   // The row's own column is the truth about visibility — the copy inside `data`
   // is only what the page last wrote, and the database is what enforces it.
@@ -63,11 +86,7 @@ export async function fetchPeriods(): Promise<{ periods: Period[]; error?: strin
 }
 
 export async function savePeriod(period: Period): Promise<{ error?: string }> {
-  if (!supabase) return {};
-  const { error } = await supabase
-    .from('periods')
-    .upsert(rowFor(period), { onConflict: 'id' });
-  return { error: error?.message };
+  return upsertRows([rowFor(period)]);
 }
 
 export async function deletePeriod(id: string): Promise<{ error?: string }> {
@@ -78,10 +97,7 @@ export async function deletePeriod(id: string): Promise<{ error?: string }> {
 
 /** Push a whole set of periods — used once, to move existing books up. */
 export async function uploadPeriods(periods: Period[]): Promise<{ error?: string }> {
-  if (!supabase) return {};
-  const rows = periods.map(rowFor);
-  const { error } = await supabase.from('periods').upsert(rows, { onConflict: 'id' });
-  return { error: error?.message };
+  return upsertRows(periods.map(rowFor));
 }
 
 /** Live updates from anyone else editing. Returns an unsubscribe function. */
