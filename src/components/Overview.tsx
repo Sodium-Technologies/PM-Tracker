@@ -44,7 +44,8 @@ export default function Overview({ periods, period, result }: {
           )}
         </div>
         <dl className="settle">
-          <div className="row"><dt>Money earned</dt><dd>{fmtUsd(result.totals.earnedUsd)}</dd></div>
+          <div className="row"><dt>Money earned <span className="hint">estimated</span></dt><dd>{fmtUsd(result.totals.earnedUsd)}</dd></div>
+          <div className="row"><dt>Received so far <span className="hint">realised</span></dt><dd>{fmtUsd(result.totals.receivedUsd)}</dd></div>
           <div className="row"><dt>The team's share</dt><dd>{fmtPkr(result.totals.freelancerPkr)}</dd></div>
           <div className="row"><dt>The company's share</dt><dd>{fmtPkr(result.totals.companyPkr)}</dd></div>
           <div className="row rule"><dt>The month is worth</dt><dd>{fmtPkr(result.ledger.transferablePkr)}</dd></div>

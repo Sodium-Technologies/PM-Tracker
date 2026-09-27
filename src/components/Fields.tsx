@@ -19,6 +19,41 @@ export function TextInput({ id, value, onChange, placeholder, className = '' }: 
 
 /** Numeric input that keeps the raw text while typing, so "1.", "" and "-" work,
  *  with the unit shown beside it rather than inside the value. */
+/** A number that may be left blank, where blank means "work it out for me".
+ *  Clearing the box gives back null rather than 0, so "nothing received yet" and
+ *  "zero received, and I mean it" stay different answers. */
+export function OptionalNumberInput({ value, onChange, placeholder, width = 78, label }: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  placeholder?: string;
+  width?: number;
+  label?: string;
+}) {
+  const canEdit = useCanEdit();
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const shown = draft ?? (value === null || value === undefined ? '' : String(value));
+  return (
+    <input
+      className="cell-input num"
+      style={{ width, minWidth: width }}
+      type="number"
+      step="any"
+      aria-label={label}
+      placeholder={placeholder}
+      readOnly={!canEdit}
+      value={shown}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const text = e.target.value.trim();
+        if (!text) { onChange(null); return; }
+        const n = parseFloat(text);
+        onChange(Number.isFinite(n) ? n : 0);
+      }}
+      onBlur={() => setDraft(null)}
+    />
+  );
+}
+
 export function NumberInput({ id, value, onChange, unit, width = 72, step = 'any' }: {
   id?: string; value: number; onChange: (v: number) => void;
   unit?: string; width?: number; step?: string;

@@ -28,6 +28,14 @@ export interface Account {
   /** Percentage of net revenue paid out to the freelancer pool (rest is company). */
   freelancerPct: number;
   status: string;
+  /** What the client has actually sent, in `currency` — realised revenue, as
+   *  opposed to what the work is estimated to be worth.
+   *
+   *  `null` means "follow the status", which is the ordinary case: an account
+   *  marked received has realised its whole estimate, and one that has not is
+   *  realising nothing yet. A number overrides that, for a part payment, a short
+   *  payment, or money in before the month is closed. */
+  receivedAmount: number | null;
   /** The client pays the company's account directly, so this money never passes
    *  through the person keeping the books and is not theirs to send on. */
   paidDirect: boolean;

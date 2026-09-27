@@ -302,29 +302,37 @@ export function exportWorkbook(periods: Period[], filename: string) {
   };
 
   const summary: (string | number)[][] = [
-    ['Period', 'USD→PKR', 'Gross USD', 'Fees USD', 'Earned USD', 'Freelancer USD', 'Company USD', 'Staff pay PKR', 'Transferable PKR', 'Remaining PKR'],
+    ['Period', 'USD→PKR', 'Gross USD', 'Fees USD', 'Earned USD', 'Received USD', 'Outstanding USD',
+      'Freelancer USD', 'Company USD', 'Staff pay PKR', 'Transferable PKR', 'Remaining PKR'],
   ];
 
   for (const p of periods) {
     const res = computePeriod(p);
     summary.push([
       p.label, p.usdToPkr, res.totals.grossUsd, res.totals.feeUsd, res.totals.earnedUsd,
+      res.totals.receivedUsd, res.totals.outstandingUsd,
       res.totals.freelancerUsd, res.totals.companyUsd, res.totals.staffPayPkr,
       res.ledger.transferablePkr, res.ledger.remainingPkr,
     ]);
 
     const rows: (string | number)[][] = [
-      ['Account', 'Owner', 'Currency', 'Rate', 'Units', 'Gross', 'Fee %', 'Fee', 'Adjustment', 'Earned USD', 'Earned PKR', 'Freelancer %', 'Freelancer USD', 'Freelancer PKR', 'Company USD', 'Company PKR', 'Status', 'Notes'],
+      ['Account', 'Owner', 'Currency', 'Rate', 'Units', 'Gross', 'Fee %', 'Fee', 'Adjustment',
+        'Earned USD', 'Earned PKR', 'Received USD', 'Received PKR', 'Outstanding USD', 'Received set by',
+        'Freelancer %', 'Freelancer USD', 'Freelancer PKR', 'Company USD', 'Company PKR', 'Status', 'Notes'],
     ];
     for (const a of res.accounts) {
       rows.push([
         a.account.name, a.account.owner, a.account.currency, a.account.rate, a.units, a.grossUsd,
         a.account.feePct, a.feeUsd, a.account.adjustmentUsd, a.earnedUsd, a.earnedPkr,
+        a.receivedUsd, a.receivedPkr, a.outstandingUsd, a.receivedIsManual ? 'entered' : 'status',
         a.account.freelancerPct, a.freelancerUsd, a.freelancerPkr, a.companyUsd, a.companyPkr,
         a.account.status, a.account.notes,
       ]);
     }
-    rows.push(['TOTAL', '', '', '', '', res.totals.grossUsd, '', res.totals.feeUsd, '', res.totals.earnedUsd, res.totals.earnedPkr, '', res.totals.freelancerUsd, res.totals.freelancerPkr, res.totals.companyUsd, res.totals.companyPkr, '', '']);
+    rows.push(['TOTAL', '', '', '', '', res.totals.grossUsd, '', res.totals.feeUsd, '',
+      res.totals.earnedUsd, res.totals.earnedPkr,
+      res.totals.receivedUsd, res.totals.receivedPkr, res.totals.outstandingUsd, '',
+      '', res.totals.freelancerUsd, res.totals.freelancerPkr, res.totals.companyUsd, res.totals.companyPkr, '', '']);
 
     rows.push([], ['Division (share of each account\'s freelancer pool)']);
     rows.push(['Name', 'Pay PKR', 'Pay USD', ...res.accounts.map((a) => a.account.name)]);
@@ -343,7 +351,8 @@ export function exportWorkbook(periods: Period[], filename: string) {
     for (const o of p.otherPayables) rows.push([`Payable — ${o.label}`, o.amountPkr]);
     rows.push(['Company share', res.totals.companyPkr]);
     rows.push(['Owed this period', res.ledger.transferablePkr]);
-    rows.push(['Money received', res.ledger.receivedPkr]);
+    rows.push(['Money received (realised)', res.ledger.receivedPkr]);
+    rows.push(['Still outstanding (estimated, not yet in)', res.totals.outstandingPkr]);
     rows.push(['Less reimbursements', -res.ledger.reimbursementsPkr]);
     for (const w of res.staff.filter((x) => x.paidHerePkr > 0)) {
       const how = w.staff.retained

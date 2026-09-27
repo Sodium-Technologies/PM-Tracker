@@ -17,6 +17,14 @@ export interface AccountResult {
   feeUsd: number;
   earnedUsd: number;
   earnedPkr: number;
+  /** what the client has actually sent — realised revenue */
+  receivedUsd: number;
+  receivedPkr: number;
+  /** estimated, less realised: still to come in */
+  outstandingUsd: number;
+  outstandingPkr: number;
+  /** true when the realised figure was typed rather than taken from the status */
+  receivedIsManual: boolean;
   freelancerUsd: number;
   freelancerPkr: number;
   companyUsd: number;
@@ -24,6 +32,10 @@ export interface AccountResult {
   /** total of all staff shares on this account; 1 means fully allocated */
   allocated: number;
 }
+
+/** A client has paid when the account says so. The status is free text, so it
+ *  is matched the same way everywhere. */
+export const isReceived = (status: string) => /received/i.test(status || '');
 
 export function computeAccount(
   account: Account,
@@ -42,6 +54,16 @@ export function computeAccount(
   const toPkr = (v: number) => (inPkr ? v : v * usdToPkr);
 
   const earnedUsd = toUsd(earned);
+
+  // Realised revenue. Left alone it follows the status, so the ordinary case —
+  // a client who paid what the work was worth — needs no typing: the estimate
+  // and the realised amount are the same number. A figure typed into the
+  // received column overrides that, for a part payment or a short payment.
+  const receivedIsManual = account.receivedAmount !== null && account.receivedAmount !== undefined;
+  const realised = receivedIsManual
+    ? Number(account.receivedAmount) || 0
+    : (isReceived(account.status) ? earned : 0);
+
   const freelancerUsd = earnedUsd * (account.freelancerPct / 100);
   const freelancerPkr = toPkr(earned) * (account.freelancerPct / 100);
   const allocated = sum(staff.map((s) => s.shares[account.id] || 0));
@@ -52,6 +74,11 @@ export function computeAccount(
     feeUsd: toUsd(fee),
     earnedUsd,
     earnedPkr: toPkr(earned),
+    receivedUsd: toUsd(realised),
+    receivedPkr: toPkr(realised),
+    outstandingUsd: earnedUsd - toUsd(realised),
+    outstandingPkr: toPkr(earned) - toPkr(realised),
+    receivedIsManual,
     freelancerUsd,
     freelancerPkr,
     companyUsd: earnedUsd - freelancerUsd,
@@ -87,6 +114,12 @@ export interface PeriodResult {
     feeUsd: number;
     earnedUsd: number;
     earnedPkr: number;
+    /** realised: what clients have actually sent */
+    receivedUsd: number;
+    receivedPkr: number;
+    /** estimated, less realised */
+    outstandingUsd: number;
+    outstandingPkr: number;
     freelancerUsd: number;
     freelancerPkr: number;
     companyUsd: number;
@@ -123,10 +156,6 @@ export interface PeriodResult {
   };
   warnings: string[];
 }
-
-/** A client has paid when the account says so. The status is free text, so it
- *  is matched the same way everywhere. */
-export const isReceived = (status: string) => /received/i.test(status || '');
 
 export function computePeriod(period: Period): PeriodResult {
   const rate = Number(period.usdToPkr) || 0;
@@ -178,6 +207,10 @@ export function computePeriod(period: Period): PeriodResult {
     feeUsd: sum(accounts.map((a) => a.feeUsd)),
     earnedUsd: sum(accounts.map((a) => a.earnedUsd)),
     earnedPkr: sum(accounts.map((a) => a.earnedPkr)),
+    receivedUsd: sum(accounts.map((a) => a.receivedUsd)),
+    receivedPkr: sum(accounts.map((a) => a.receivedPkr)),
+    outstandingUsd: sum(accounts.map((a) => a.outstandingUsd)),
+    outstandingPkr: sum(accounts.map((a) => a.outstandingPkr)),
     freelancerUsd: sum(accounts.map((a) => a.freelancerUsd)),
     freelancerPkr: sum(accounts.map((a) => a.freelancerPkr)),
     companyUsd: sum(accounts.map((a) => a.companyUsd)),
@@ -209,9 +242,7 @@ export function computePeriod(period: Period): PeriodResult {
   // the company's account never reaches the person keeping the books, so it is
   // not part of what they hold either.
   const receivedPkr = sum(
-    accounts
-      .filter((a) => isReceived(a.account.status) && !a.account.paidDirect)
-      .map((a) => a.earnedPkr),
+    accounts.filter((a) => !a.account.paidDirect).map((a) => a.receivedPkr),
   );
   // What is left to send is the money in hand, less every rupee of it that has
   // already gone somewhere: handed over here (a wage paid locally), spent on
@@ -239,6 +270,14 @@ export function computePeriod(period: Period): PeriodResult {
     }
     for (const problem of entryProblems(ar.account.entries, timeFormat)) {
       warnings.push(`${ar.account.name}: a time entry reads ${problem}`);
+    }
+  }
+  for (const ar of accounts) {
+    if (ar.receivedIsManual && ar.outstandingUsd > 0.005 && isReceived(ar.account.status)) {
+      warnings.push(
+        `${ar.account.name} is marked received but only ${fmtUsd(ar.receivedUsd)} of `
+        + `${fmtUsd(ar.earnedUsd)} has come in — ${fmtUsd(ar.outstandingUsd)} is still outstanding.`,
+      );
     }
   }
   for (const s of staff) {

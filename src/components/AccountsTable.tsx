@@ -1,8 +1,8 @@
 import type { Account, Period } from '../lib/types';
 import { STATUS_OPTIONS } from '../lib/types';
-import { fmtPkr, fmtUsd, type PeriodResult } from '../lib/calc';
+import { fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
 import { hoursAsText } from '../lib/time';
-import { EditOnly, EntriesInput, NumberInput, TextInput } from './Fields';
+import { EditOnly, EntriesInput, NumberInput, OptionalNumberInput, TextInput } from './Fields';
 import { newAccount } from '../lib/state';
 import { useCanEdit } from '../lib/access';
 
@@ -48,7 +48,9 @@ export default function AccountsTable({ result, update, timeFormat }: {
               <th className="fig">Before fee</th>
               <th className="fig">Fee</th>
               <th className="fig">One-off +/−</th>
-              <th className="fig">They pay us</th>
+              <th className="fig" title="What the work is worth, whether or not it has been paid">Estimated</th>
+              <th className="fig" title="What the client has actually sent. Left blank it follows the status: the full estimate once marked received, nothing before that. Type a figure for a part payment.">Received</th>
+              <th className="fig" title="Estimated, less received">Outstanding</th>
               <th className="fig">In PKR</th>
               <th className="fig">Team %</th>
               <th className="fig">Team gets</th>
@@ -88,6 +90,24 @@ export default function AccountsTable({ result, update, timeFormat }: {
                     <NumberInput value={a.adjustmentUsd} onChange={(v) => patch(a.id, { adjustmentUsd: v })} width={64} />
                   </td>
                   <td className="fig mono total">{fmtUsd(r.earnedUsd)}</td>
+                  {/* the box is in the account's own currency, so the hint is too */}
+                  <td className="fig">
+                    <OptionalNumberInput
+                      value={a.receivedAmount}
+                      label={`Received from ${a.name}`}
+                      placeholder={round2(a.currency === 'PKR' ? r.receivedPkr : r.receivedUsd).toString()}
+                      onChange={(v) => patch(a.id, { receivedAmount: v })}
+                    />
+                    {r.receivedIsManual && (
+                      <EditOnly>
+                        <button className="link tiny" title="Go back to following the status"
+                          onClick={() => patch(a.id, { receivedAmount: null })}>auto</button>
+                      </EditOnly>
+                    )}
+                  </td>
+                  <td className={`fig mono${r.outstandingUsd > 0.005 ? ' alloc-off' : ' sub-fig'}`}>
+                    {r.outstandingUsd > 0.005 ? fmtUsd(r.outstandingUsd) : '—'}
+                  </td>
                   <td className="fig mono">{fmtPkr(r.earnedPkr)}</td>
                   <td className="fig">
                     <NumberInput value={a.freelancerPct} onChange={(v) => patch(a.id, { freelancerPct: v })} width={48} unit="%" />
@@ -124,7 +144,7 @@ export default function AccountsTable({ result, update, timeFormat }: {
               );
             })}
             {!result.accounts.length && (
-              <tr><td colSpan={16} className="empty">No clients yet — add one, or load a sheet.</td></tr>
+              <tr><td colSpan={18} className="empty">No clients yet — add one, or load a sheet.</td></tr>
             )}
           </tbody>
           <tfoot>
@@ -134,6 +154,10 @@ export default function AccountsTable({ result, update, timeFormat }: {
               <td className="fig mono">{fmtUsd(t.feeUsd)}</td>
               <td />
               <td className="fig mono total">{fmtUsd(t.earnedUsd)}</td>
+              <td className="fig mono total">{fmtUsd(t.receivedUsd)}</td>
+              <td className={`fig mono${t.outstandingUsd > 0.005 ? ' alloc-off' : ''}`}>
+                {t.outstandingUsd > 0.005 ? fmtUsd(t.outstandingUsd) : '—'}
+              </td>
               <td className="fig mono">{fmtPkr(t.earnedPkr)}</td>
               <td />
               <td className="fig mono">{fmtPkr(t.freelancerPkr)}</td>

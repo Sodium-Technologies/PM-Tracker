@@ -23,6 +23,31 @@ per period.
    reimbursements, payables outside the matrix, amounts held back, transfers
    already made, and what still has to be remitted.
 
+### Estimated and realised revenue
+
+The Revenue tab carries three figures per client:
+
+- **Estimated** — rate × time worked, less the fee. What the work is worth,
+  whether or not anyone has paid for it.
+- **Received** — what the client has actually sent. Realised revenue.
+- **Outstanding** — the difference, shown only when there is one.
+
+Received is left blank in the ordinary case and follows the status: the whole
+estimate once the client is marked received, nothing before that. So a month
+where everyone has paid shows received equal to estimated without anything being
+typed.
+
+Type a figure into Received when that is not true — a part payment, a short
+payment, or money in before the month is closed. The row then shows an **auto**
+link to hand it back to the status. A client marked received whose entered
+amount falls short of the estimate raises a warning on the month, naming what is
+still out.
+
+Blank and zero are different answers: blank means "work it out from the status",
+zero means "nothing has come in, and I mean it".
+
+Only realised revenue counts towards what is left to send — see below.
+
 ### Wages paid here, and advances
 
 Somebody on the payroll can take money during the month. It comes off **their

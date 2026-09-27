@@ -380,6 +380,10 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
             <dl className="figures">
               <Figure label="Money earned" value={fmtUsd(result.totals.earnedUsd)} sub={fmtPkr(result.totals.earnedPkr)} />
+              <Figure label="Received so far" value={fmtUsd(result.totals.receivedUsd)}
+                sub={result.totals.outstandingUsd > 0.005
+                  ? `${fmtUsd(result.totals.outstandingUsd)} still out`
+                  : 'all in'} />
               <Figure label="The team's share" value={fmtPkr(result.totals.freelancerPkr)} sub={fmtUsd(result.totals.freelancerUsd)} />
               <Figure label="The company's share" value={fmtPkr(result.totals.companyPkr)} sub={fmtUsd(result.totals.companyUsd)} />
               <Figure label="Total to pay out" value={fmtPkr(result.ledger.transferablePkr)}

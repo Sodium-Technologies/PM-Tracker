@@ -17,6 +17,7 @@ export function newAccount(partial: Partial<Account> = {}): Account {
     adjustmentUsd: 0,
     freelancerPct: 70,
     status: 'Pending',
+    receivedAmount: null,
     notes: '',
     ...partial,
   };
@@ -54,7 +55,8 @@ export function rollForward(period: Period, label?: string): Period {
   const accounts = period.accounts.map((a) => {
     const id = uid();
     idMap[a.id] = id;
-    return { ...a, id, entries: [0], adjustmentUsd: 0, status: 'Pending', notes: '' };
+    // Last month's money is last month's; a fresh month has realised nothing.
+    return { ...a, id, entries: [0], adjustmentUsd: 0, status: 'Pending', receivedAmount: null, notes: '' };
   });
   const staff = period.staff.map((s) => {
     const shares: Record<string, number> = {};
@@ -108,6 +110,7 @@ export function normalize(state: AppState): AppState {
       a.entries = Array.isArray(a.entries) && a.entries.length ? a.entries : [0];
       a.feePct ??= 0;
       a.adjustmentUsd ??= 0;
+      a.receivedAmount ??= null;
       a.freelancerPct ??= 70;
     }
     for (const m of p.staff) {
