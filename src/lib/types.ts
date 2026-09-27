@@ -88,6 +88,16 @@ export interface Transfer {
   date: string;
 }
 
+/** Who may open a month.
+ *
+ *  - `private`  only the address that created it
+ *  - `core`     administrators and editors
+ *  - `public`   everyone with access
+ *
+ *  The database decides this, not the page: a private month is never returned
+ *  to anyone else, so hiding it is real rather than cosmetic. */
+export type Visibility = 'private' | 'core' | 'public';
+
 export interface Period {
   id: string;
   /** e.g. "August 2026" */
@@ -108,6 +118,8 @@ export interface Period {
    *  a top-up. Recorded as paid, and deducted from what must be remitted. */
   localWages: LineItem[];
   transfers: Transfer[];
+  /** Defaults to `core` — shared with the people who run the books. */
+  visibility: Visibility;
 }
 
 export interface AppState {

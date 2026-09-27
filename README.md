@@ -48,6 +48,37 @@ zero means "nothing has come in, and I mean it".
 
 Only realised revenue counts towards what is left to send — see below.
 
+### Who can see a month
+
+Each month carries a **Seen by** setting, in the bar beside Duplicate and Delete:
+
+| | Who opens it |
+|---|---|
+| **Only me** | the address that created the month, and nobody else — not another administrator either |
+| **Core** | administrators and editors *(the default)* |
+| **Everyone with access** | anyone on the access list, viewers included |
+
+A month set to *Only me* shows a dot beside it in the rail, so you can tell at a
+glance which of them are hidden.
+
+**This is enforced in the database, not in the page.** Row-level security decides
+which rows are returned at all, so a hidden month is not sent to anyone else's
+browser — there is nothing for them to find in the page, the network traffic or
+the export. The `owner_email` behind *Only me* is stamped by a trigger from the
+signed-in address on insert and never changes afterwards, so a month cannot be
+claimed by writing someone else's address into it.
+
+Two consequences worth knowing:
+
+- Whoever creates a month owns it. If somebody else needs to be able to hide
+  work, it has to be a month they made.
+- A month nobody may see is a month nobody may change: an editor cannot write
+  over a private month it cannot read.
+
+Re-run `supabase/schema.sql` after updating — it adds the two columns and the
+policies, and claims every existing month for the first administrator, so none
+of them become unreachable the first time one is marked private.
+
 ### Undo
 
 Everything that changes the books records the state it replaced. **Undo** then

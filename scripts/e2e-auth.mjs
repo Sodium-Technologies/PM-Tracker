@@ -88,7 +88,10 @@ async function open({ email, role, periods = [], down = false, path = '', instal
     }
     if (url.includes('/rest/v1/periods')) {
       if (route.request().method() !== 'GET') return json([]);
-      return json(periods.map((p) => ({ id: p.id, label: p.label, data: p })));
+      return json(periods.map((p) => ({
+        id: p.id, label: p.label, data: p,
+        visibility: p.visibility ?? 'core', owner_email: 'nav8khan@gmail.com',
+      })));
     }
     return json({});
   });
@@ -197,6 +200,8 @@ const samplePeriod = {
   ok('viewer gets no Delete button', (await page.getByRole('button', { name: 'Delete' }).count()) === 0);
   ok('viewer is not offered undo', (await page.getByRole('button', { name: /^Undo/ }).count()) === 0);
   ok('viewer sees the view-only badge', await page.locator('.readonly-badge').isVisible());
+  ok('a viewer cannot change who sees a month', (await page.locator('#visibility').count()) === 0);
+  ok('a viewer is told who a month is shared with', await page.locator('.seen-badge').isVisible());
   ok('viewer lands on the summary', (await page.locator('.tab.active').innerText()) === 'Summary');
   ok('the summary stays on this month only', (await page.locator('.chart').count()) === 0);
   ok('the analysis sits outside the months',
@@ -221,6 +226,11 @@ const samplePeriod = {
   const { page, ctx } = await open({ email: 'editor@company.com', role: 'editor', periods: [samplePeriod] });
   ok('editor is labelled can edit', (await page.locator('.role').innerText()).trim() === 'Can change');
   ok('editor gets New period', (await page.getByRole('button', { name: 'Start a new month' }).count()) === 1);
+  ok('editor can set who sees a month', await page.locator('#visibility').isVisible());
+  ok('a month defaults to the core team', (await page.locator('#visibility').inputValue()) === 'core');
+  ok('the three levels are offered',
+     (await page.locator('#visibility option').allInnerTexts()).length === 3,
+     (await page.locator('#visibility option').allInnerTexts()).join(', '));
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.waitForTimeout(300);
   ok('editor gets no access panel', (await page.locator('#grant-email').count()) === 0);

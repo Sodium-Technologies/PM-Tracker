@@ -33,7 +33,7 @@ export function newPeriod(label: string, usdToPkr = 280): Period {
     // A month started here is typed by hand, on a timesheet's terms.
     timeFormat: 'hm',
     accounts: [], staff: [], reimbursements: [], otherPayables: [], withheld: [],
-    localWages: [], transfers: [],
+    localWages: [], transfers: [], visibility: 'core',
   };
 }
 
@@ -71,6 +71,9 @@ export function rollForward(period: Period, label?: string): Period {
     // The hours are cleared, so the new month can read them as a timesheet does
     // without changing the meaning of anything already entered.
     timeFormat: 'hm',
+    // A month rolled forward keeps the last one's visibility: hiding January and
+    // then finding February shared would be a nasty surprise.
+    visibility: period.visibility ?? 'core',
     accounts,
     staff,
     reimbursements: period.reimbursements.map((r) => ({ ...r, id: uid() })),
@@ -104,6 +107,7 @@ export function normalize(state: AppState): AppState {
     p.localWages ??= [];
     p.transfers ??= [];
     p.timeFormat ??= 'decimal';
+    p.visibility ??= 'core';
     for (const a of p.accounts) {
       a.currency ??= 'USD';
       a.paidDirect ??= false;

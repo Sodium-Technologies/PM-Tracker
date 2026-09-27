@@ -10,9 +10,15 @@
 --   editor       edits the books
 --   viewer       reads the books, changes nothing
 --
--- Access is enforced by row-level security in the database, not by the page:
--- a viewer calling the API directly still cannot write, and an address that is
--- not listed here reads nothing at all.
+-- And three levels of visibility, per month:
+--   private   only the person who created it, whoever else is an administrator
+--   core      super_admin and editor
+--   public    everyone with access, viewer included
+--
+-- Both are enforced by row-level security in the database, not by the page: a
+-- viewer calling the API directly still cannot write, an address that is not
+-- listed here reads nothing at all, and a private month is not returned to
+-- anyone but its owner — the page never has to be trusted to hide it.
 
 -- ---------------------------------------------------------------- 1. who has access
 
@@ -94,28 +100,68 @@ create table if not exists public.periods (
   updated_by text
 );
 
+-- Added after the first release; both are safe to run on a table that has them.
+alter table public.periods
+  add column if not exists visibility text not null default 'core';
+alter table public.periods
+  add column if not exists owner_email text;
+
+do $$
+begin
+  alter table public.periods
+    add constraint periods_visibility_check
+    check (visibility in ('private', 'core', 'public'));
+exception
+  when duplicate_object then null;
+end
+$$;
+
 alter table public.periods enable row level security;
+
+-- Who may see a month at all. A private month belongs to the address that
+-- created it and to nobody else — not even another administrator, because
+-- "hidden" that an administrator can undo is not hidden.
+create or replace function public.can_see_period(visibility text, owner_email text)
+returns boolean
+language sql
+stable
+as $$
+  select case coalesce(visibility, 'core')
+    when 'public'  then public.member_role() is not null
+    when 'core'    then public.member_role() in ('super_admin', 'editor')
+    when 'private' then lower(coalesce(owner_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+    else false
+  end
+$$;
 
 drop policy if exists periods_select on public.periods;
 create policy periods_select on public.periods
   for select to authenticated
-  using (public.member_role() is not null);
+  using (public.can_see_period(visibility, owner_email));
 
 drop policy if exists periods_insert on public.periods;
 create policy periods_insert on public.periods
   for insert to authenticated
   with check (public.member_role() in ('super_admin', 'editor'));
 
+-- A month nobody may see is a month nobody may change: without the `using`
+-- clause an editor could write over a private month it cannot read.
 drop policy if exists periods_update on public.periods;
 create policy periods_update on public.periods
   for update to authenticated
-  using (public.member_role() in ('super_admin', 'editor'))
+  using (
+    public.member_role() in ('super_admin', 'editor')
+    and public.can_see_period(visibility, owner_email)
+  )
   with check (public.member_role() in ('super_admin', 'editor'));
 
 drop policy if exists periods_delete on public.periods;
 create policy periods_delete on public.periods
   for delete to authenticated
-  using (public.member_role() in ('super_admin', 'editor'));
+  using (
+    public.member_role() in ('super_admin', 'editor')
+    and public.can_see_period(visibility, owner_email)
+  );
 
 -- Stamp who last touched a period, and when.
 create or replace function public.touch_updated_at()
@@ -125,6 +171,14 @@ as $$
 begin
   new.updated_at := now();
   new.updated_by := coalesce(auth.jwt() ->> 'email', new.updated_by);
+  -- The owner is stamped from the signed-in address, never taken from the
+  -- request, and never changes hands afterwards. Otherwise anyone could claim a
+  -- private month by writing someone else's address into it — or their own.
+  if tg_op = 'INSERT' then
+    new.owner_email := coalesce(auth.jwt() ->> 'email', new.owner_email);
+  else
+    new.owner_email := old.owner_email;
+  end if;
   return new;
 end
 $$;
@@ -149,3 +203,17 @@ $$;
 
 -- Should return one row: your address, as super_admin.
 select email, role, created_at from public.app_users order by created_at;
+
+-- Months that existed before this carry no owner, which would make any of them
+-- unreachable the moment it was marked private. This names the first
+-- administrator as the owner of every month that has none. It reads the address
+-- from the table rather than from auth.jwt(), because the SQL editor runs as the
+-- project, not as you, and auth.jwt() is empty there.
+update public.periods p
+set owner_email = (
+  select u.email from public.app_users u
+  where u.role = 'super_admin'
+  order by u.created_at
+  limit 1
+)
+where p.owner_email is null;

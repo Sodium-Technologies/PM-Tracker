@@ -335,7 +335,10 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
                   className={`period${view === 'month' && p.id === period.id ? ' active' : ''}`}
                   onClick={() => openMonth(p.id)}
                 >
-                  <span>{p.label.replace(/\s*\d{4}$/, '').replace(/^PM - /, '')}</span>
+                  <span>
+                    {p.visibility === 'private' && <span className="seen-dot" title="Only you can see this month">•</span>}
+                    {p.label.replace(/\s*\d{4}$/, '').replace(/^PM - /, '')}
+                  </span>
                   <span className="period-sum">{r.totals.earnedUsd ? fmtUsd(r.totals.earnedUsd) : '—'}</span>
                 </button>
               </React.Fragment>
@@ -446,6 +449,24 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
                   <option value="decimal">12.20 = 12.2 hours</option>
                 </select>
               </label>
+              {canEdit && (
+                <label className="rate-field" htmlFor="visibility"
+                  title="Who can open this month. The database enforces it — a hidden month is not sent to anyone else.">
+                  <span>Seen by</span>
+                  <select id="visibility" className={`cell-input seen seen-${period.visibility ?? 'core'}`}
+                    value={period.visibility ?? 'core'}
+                    onChange={(e) => update((d) => { d.visibility = e.target.value as Period['visibility']; })}>
+                    <option value="private">Only me</option>
+                    <option value="core">Core — admins and editors</option>
+                    <option value="public">Everyone with access</option>
+                  </select>
+                </label>
+              )}
+              {!canEdit && (
+                <span className={`seen-badge seen-${period.visibility ?? 'core'}`}>
+                  {period.visibility === 'public' ? 'Shared with everyone' : 'Shared with the core team'}
+                </span>
+              )}
               <div className="spacer" />
               {canEdit ? (
                 <>
