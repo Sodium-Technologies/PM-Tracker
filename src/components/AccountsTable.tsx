@@ -1,15 +1,19 @@
+import React from 'react';
 import type { Account, Period } from '../lib/types';
 import { fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
 import { hoursAsText } from '../lib/time';
 import { EditOnly, EntriesInput, NumberInput, OptionalNumberInput, TextInput } from './Fields';
 import { newAccount } from '../lib/state';
 import { useCanEdit } from '../lib/access';
+import WeekImport from './WeekImport';
 
-export default function AccountsTable({ result, update, timeFormat }: {
+export default function AccountsTable({ period, result, update, timeFormat }: {
+  period: Period;
   result: PeriodResult;
   update: (fn: (p: Period) => void) => void;
   timeFormat: 'hm' | 'decimal';
 }) {
+  const [week, setWeek] = React.useState(false);
   const canEdit = useCanEdit();
   const patch = (id: string, p: Partial<Account>) =>
     update((d) => {
@@ -18,6 +22,10 @@ export default function AccountsTable({ result, update, timeFormat }: {
     });
 
   const t = result.totals;
+
+  if (week) {
+    return <WeekImport period={period} result={result} update={update} onClose={() => setWeek(false)} />;
+  }
 
   return (
     <section className="panel">
@@ -29,11 +37,14 @@ export default function AccountsTable({ result, update, timeFormat }: {
               : 'rate × time worked, less the platform fee — 12.20 means 12.2 hours'}
           </span>
         </h2>
-        <EditOnly>
-          <button className="btn" onClick={() => update((d) => d.accounts.push(newAccount()))}>
-            Add a client
-          </button>
-        </EditOnly>
+        <div className="head-actions">
+          <EditOnly>
+            <button className="btn" onClick={() => setWeek(true)}>Add a week</button>
+            <button className="btn" onClick={() => update((d) => d.accounts.push(newAccount()))}>
+              Add a client
+            </button>
+          </EditOnly>
+        </div>
       </div>
       <div className="scroll">
         <table>

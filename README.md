@@ -23,6 +23,33 @@ per period.
    reimbursements, payables outside the matrix, amounts held back, transfers
    already made, and what still has to be remitted.
 
+### Adding a week off Upwork
+
+**Revenue → Add a week.** Paste one line per project — name, hours, earnings,
+fee — separated by tabs or commas, and the screen shows the month as it stands
+beside the week as it arrived before anything is written.
+
+Each line carries two choices:
+
+- **Goes to** — the client it lands on. Names are matched exactly first, then by
+  one containing the other ("Luxe" against "LUXE - Leasing"), and a close match
+  says so. Two candidates is not a match: the choice comes back to you, because
+  a week on the wrong client's bill is not something the books will tell you
+  about afterwards. An unmatched line defaults to **Leave it out**, and can be
+  pointed at an existing client or added as a new one.
+- **What to do** — add the hours to the month, replace the month's hours, or
+  leave the line out. The last column shows what that client will have once it
+  is applied.
+
+The rate and the fee percentage are taken from the transactions: earnings ÷
+hours, and fee ÷ earnings. Those also cross-check the timesheet — a line where
+the money implies a different number of hours than the timesheet claims is
+flagged in the row, with both figures, and left for you to resolve.
+
+The page cannot read a screenshot; it is a static page with no server. Send the
+images to Claude, which extracts the rows and hands back the block to paste, so
+the arithmetic is checkable before any of it reaches the books.
+
 ### Estimated and realised revenue
 
 The Revenue tab carries three figures per client:
