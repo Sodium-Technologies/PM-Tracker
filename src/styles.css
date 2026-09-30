@@ -925,3 +925,23 @@ select.seen-public { border-color: var(--accent); color: var(--accent); }
 .week tbody tr.week-skip td { opacity: 0.45; }
 .week select.cell-input { min-width: 128px; }
 .warn-text { color: var(--warn); }
+
+.week-drop {
+  border: 1px dashed var(--rule-strong);
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+  background: var(--surface-sunk);
+}
+.week-drop b { display: block; margin-bottom: 4px; }
+.week-drop .settings-note { max-width: 46ch; margin: 0 auto 12px; }
+.week-weeks { margin-top: 2px; }
+.week-weeks .check { font-size: 13px; color: var(--ink); gap: 8px; }
+.code-fallback { margin: 14px 0 0; }
+.code-fallback summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--accent);
+  padding: 4px 0;
+}
+.code-fallback summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

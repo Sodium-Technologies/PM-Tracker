@@ -7,8 +7,9 @@ import { newAccount } from '../lib/state';
 import { useCanEdit } from '../lib/access';
 import WeekImport from './WeekImport';
 
-export default function AccountsTable({ period, result, update, timeFormat }: {
+export default function AccountsTable({ period, periods, result, update, timeFormat }: {
   period: Period;
+  periods: Period[];
   result: PeriodResult;
   update: (fn: (p: Period) => void) => void;
   timeFormat: 'hm' | 'decimal';
@@ -24,7 +25,10 @@ export default function AccountsTable({ period, result, update, timeFormat }: {
   const t = result.totals;
 
   if (week) {
-    return <WeekImport period={period} result={result} update={update} onClose={() => setWeek(false)} />;
+    return (
+      <WeekImport period={period} periods={periods} result={result} update={update}
+        onClose={() => setWeek(false)} />
+    );
   }
 
   return (

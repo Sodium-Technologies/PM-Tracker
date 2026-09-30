@@ -36,6 +36,10 @@ export interface Account {
    *  realising nothing yet. A number overrides that, for a part payment, a short
    *  payment, or money in before the month is closed. */
   receivedAmount: number | null;
+  /** Other names this client goes by — Upwork's client team, say, which rarely
+   *  matches what the books call it. Recorded the first time somebody maps a
+   *  week onto this client, so the same week never has to be mapped twice. */
+  aliases: string[];
   /** The client pays the company's account directly, so this money never passes
    *  through the person keeping the books and is not theirs to send on. */
   paidDirect: boolean;

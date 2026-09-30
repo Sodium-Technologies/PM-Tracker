@@ -18,6 +18,7 @@ export function newAccount(partial: Partial<Account> = {}): Account {
     freelancerPct: 70,
     status: 'Pending',
     receivedAmount: null,
+    aliases: [],
     notes: '',
     ...partial,
   };
@@ -115,6 +116,7 @@ export function normalize(state: AppState): AppState {
       a.feePct ??= 0;
       a.adjustmentUsd ??= 0;
       a.receivedAmount ??= null;
+      a.aliases ??= [];
       a.freelancerPct ??= 70;
     }
     for (const m of p.staff) {

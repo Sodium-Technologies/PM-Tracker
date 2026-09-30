@@ -23,32 +23,51 @@ per period.
    reimbursements, payables outside the matrix, amounts held back, transfers
    already made, and what still has to be remitted.
 
-### Adding a week off Upwork
+### Adding weeks off Upwork
 
-**Revenue → Add a week.** Paste one line per project — name, hours, earnings,
-fee — separated by tabs or commas, and the screen shows the month as it stands
-beside the week as it arrived before anything is written.
+**Revenue → Add a week → Choose a CSV.** Hand it the transaction report straight
+from Upwork (Reports → Transaction history → Download) and it does the rest.
 
-Each line carries two choices:
+Each week of work arrives in that file as two lines sharing a transaction id: an
+Hourly line carrying `40.00 hours x $6.00 = $240.00`, and a Service Fee line
+carrying `$240.00 x 10.0% = $24.00`. They are paired, so hours, rate and fee all
+come from what Upwork actually charged rather than from anybody's arithmetic.
+Withdrawals and withdrawal fees are money leaving the account, not money earned:
+they are counted and reported at the bottom, never folded into hours.
 
-- **Goes to** — the client it lands on. Names are matched exactly first, then by
-  one containing the other ("Luxe" against "LUXE - Leasing"), and a close match
-  says so. Two candidates is not a match: the choice comes back to you, because
-  a week on the wrong client's bill is not something the books will tell you
-  about afterwards. An unmatched line defaults to **Leave it out**, and can be
-  pointed at an existing client or added as a new one.
-- **What to do** — add the hours to the month, replace the month's hours, or
-  leave the line out. The last column shows what that client will have once it
-  is applied.
+Then two screens, in order:
 
-The rate and the fee percentage are taken from the transactions: earnings ÷
-hours, and fee ÷ earnings. Those also cross-check the timesheet — a line where
-the money implies a different number of hours than the timesheet claims is
-flagged in the row, with both figures, and left for you to resolve.
+1. **Which weeks belong to this month.** Every work week in the report, with the
+   date it was paid and its totals. A report downloaded on the 30th holds work
+   from late in the previous month and stops short of the week still in review,
+   so this is where the month's boundary gets decided — by payment date or by
+   work period, whichever the books use. Tick the weeks and the footer totals
+   what was chosen.
+2. **Which client each one belongs to.** Names are matched by one the person has
+   already mapped by hand, then exactly, then by one containing the other
+   ("Post Road Management LLC" against "Post Road Management"). Two candidates is
+   not a match: the choice comes back, because a week on the wrong client's bill
+   is not something the books report afterwards. An unmatched line defaults to
+   **Leave it out** rather than to inventing a client.
 
-The page cannot read a screenshot; it is a static page with no server. Send the
-images to Claude, which extracts the rows and hands back the block to paste, so
-the arithmetic is checkable before any of it reaches the books.
+**A mapping is remembered.** Point "BSF" at Doug once and the client keeps that
+as an alias, honoured in every month from then on and marked *remembered* in the
+review — so the weekly job is: choose the file, tick the weeks, apply.
+
+Each line then chooses **Add to the month** or **Replace the month** for itself,
+and the last column shows the hours that client will have once applied — so
+applying the same weeks twice is visible before it happens rather than after.
+The rate and fee percentage are taken from the report, and also check the
+timesheet: a line whose money implies different hours than claimed is flagged in
+the row with both figures.
+
+A week only ever touches the month it is applied to. The panel names that month
+in its heading and on its apply button, and `scripts/e2e-week.mjs` proves it
+against the built app: it loads a report, applies it, then checks that exactly
+one month in the rail moved and that it was the right one.
+
+Typing a week in by hand — name, hours, earnings, fee — is still there, behind a
+disclosure, for anything the report does not cover.
 
 ### Estimated and realised revenue
 
@@ -344,6 +363,12 @@ the same file once through *Import sheet or backup* — the data then lives in y
 browser and never reaches the web.
 
 ## Checking it still works
+
+```bash
+npm run build && node scripts/e2e-week.mjs   # a week stays in its own month
+npx tsx scripts/week-checks.mts              # reading a pasted week
+```
+
 
 `scripts/e2e.mjs` drives the built app in a real browser: it imports a
 mastersheet, exercises the Excel, payout and JSON exports, reads the exported

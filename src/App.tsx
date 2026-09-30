@@ -520,7 +520,8 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
             <div className="sheet">
               {tab === 'overview' && <Overview periods={state.periods} period={period} result={result} />}
               {tab === 'revenue' && (
-                <AccountsTable period={period} result={result} update={update} timeFormat={period.timeFormat} />
+                <AccountsTable period={period} periods={state.periods} result={result}
+                  update={update} timeFormat={period.timeFormat} />
               )}
               {tab === 'division' && (
                 <DivisionMatrix period={period} result={result} update={update}

@@ -1,0 +1,6 @@
+Date,Transaction ID,Transaction type,Transaction summary,Transaction summary details,Description 1,Description 2,Description 3,Agency team,Freelancer,Client team,Account name,PO,Ref ID,Amount $,Amount in local currency,Currency,Current balance $,Payment method
+"Sep 25, 2026",900000001,Service Fee,LIHTC Outreach,"Earnings for Sep 14-Sep 20, 2026",Service fee,$1800.00 x 10.0% = $180.00,,,A Freelancer,Post Road Management LLC,A Freelancer,,900000002,-180.00,,,0.00,
+"Sep 25, 2026",900000001,Hourly,LIHTC Outreach,"Earnings for Sep 14-Sep 20, 2026","Earnings for Sep 14-Sep 20, 2026",200.00 hours x $9.00 = $1800.00,,,A Freelancer,Post Road Management LLC,A Freelancer,,900000001,1800.00,,,0.00,
+"Sep 18, 2026",900000003,Service Fee,LIHTC Outreach,"Earnings for Sep 7-Sep 13, 2026",Service fee,$90.00 x 10.0% = $9.00,,,A Freelancer,Post Road Management LLC,A Freelancer,,900000004,-9.00,,,0.00,
+"Sep 18, 2026",900000003,Hourly,LIHTC Outreach,"Earnings for Sep 7-Sep 13, 2026","Earnings for Sep 7-Sep 13, 2026",10.00 hours x $9.00 = $90.00,,,A Freelancer,Post Road Management LLC,A Freelancer,,900000003,90.00,,,0.00,
+"Sep 21, 2026",900000005,Withdrawal,Payoneer,,Payoneer,,,,,,A Freelancer,,900000005,-500.00,,,0.00,
