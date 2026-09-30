@@ -3,13 +3,14 @@ import type { Account, Period } from '../lib/types';
 import { fmtUsd, round2, type PeriodResult } from '../lib/calc';
 import { hoursAsText } from '../lib/time';
 import {
-  derive, findAccount, knownAliases, normalizeName, parseUpworkCsv, parseWeek, totalsByClient,
+  derive, findAccount, knownAliases, knownIgnored, normalizeName,
+  parseUpworkCsv, parseWeek, totalsByClient,
   type UpworkEntry, type WeekRow,
 } from '../lib/week';
 import { newAccount } from '../lib/state';
 
 type Update = (fn: (p: Period) => void) => void;
-type Action = 'append' | 'replace' | 'new' | 'skip';
+type Action = 'append' | 'replace' | 'new' | 'skip' | 'ignore';
 
 interface Line {
   row: WeekRow;
@@ -36,6 +37,7 @@ export default function WeekImport({ period, periods, result, update, onClose }:
   onClose: () => void;
 }) {
   const aliases = React.useMemo(() => knownAliases(periods), [periods]);
+  const ignored = React.useMemo(() => knownIgnored(periods), [periods]);
   const [text, setText] = React.useState('');
   const [lines, setLines] = React.useState<Line[] | null>(null);
   const [problems, setProblems] = React.useState<string[]>([]);
@@ -47,13 +49,17 @@ export default function WeekImport({ period, periods, result, update, onClose }:
 
   const weeks = React.useMemo(() => {
     const seen = new Map<string, { week: string; paid: string; hours: number; earned: number; fee: number }>();
-    for (const e of entries ?? []) {
+    for (const e of (entries ?? []).filter((x) => !ignored.has(normalizeName(x.client)))) {
       const at = seen.get(e.week) ?? { week: e.week, paid: e.paid, hours: 0, earned: 0, fee: 0 };
       at.hours += e.hours; at.earned += e.earningsUsd; at.fee += e.feeUsd;
       seen.set(e.week, at);
     }
     return [...seen.values()];
-  }, [entries]);
+  }, [entries, ignored]);
+
+  /** Weeks still in play, counted against what is actually on screen — a week
+   *  whose only project has been dismissed is no longer a week. */
+  const picked = React.useMemo(() => weeks.filter((w) => chosen.has(w.week)), [weeks, chosen]);
 
   const onFile = async (file: File) => {
     const report = parseUpworkCsv(await file.text());
@@ -68,27 +74,23 @@ export default function WeekImport({ period, periods, result, update, onClose }:
   /** Turn the chosen weeks into one line per client, then review them exactly as
    *  a pasted block is reviewed. */
   const fromReport = () => {
-    const rows = totalsByClient((entries ?? []).filter((e) => chosen.has(e.week)));
-    setLines(rows.map((row) => {
-      const hit = findAccount(row.name, period.accounts, aliases);
-      return { row, accountId: hit?.id ?? '', action: (hit ? 'append' : 'skip') as Action, matched: hit?.how ?? null };
-    }));
+    setLines(totalsByClient((entries ?? []).filter((e) => chosen.has(e.week))).map(start));
   };
 
   const read = () => {
     const { rows, problems: found } = parseWeek(text);
     setProblems(found);
-    setLines(rows.map((row) => {
-      const hit = findAccount(row.name, period.accounts, aliases);
-      return {
-        row,
-        accountId: hit?.id ?? '',
-        // An unmatched line defaults to nothing: adding a client nobody asked
-        // for is as wrong as putting the hours on the wrong one.
-        action: hit ? 'append' : 'skip',
-        matched: hit?.how ?? null,
-      };
-    }));
+    setLines(rows.map(start));
+  };
+
+  /** Where a row starts: dismissed if this project has been dismissed before,
+   *  otherwise wherever its name points. */
+  const start = (row: WeekRow): Line => {
+    if (ignored.has(normalizeName(row.name))) {
+      return { row, accountId: '', action: 'ignore', matched: null };
+    }
+    const hit = findAccount(row.name, period.accounts, aliases);
+    return { row, accountId: hit?.id ?? '', action: hit ? 'append' : 'skip', matched: hit?.how ?? null };
   };
 
   const set = (i: number, patch: Partial<Line>) =>
@@ -103,6 +105,16 @@ export default function WeekImport({ period, periods, result, update, onClose }:
         const existing = d.accounts.find((a) => a.id === line.accountId);
         const rateFromMoney = derive(row, existing?.rate ?? 0).rate;
         const feeFromMoney = derive(row, existing?.rate ?? 0).feePct;
+
+        if (line.action === 'ignore') {
+          const already = (d.ignoredProjects ?? []).some((x) => normalizeName(x) === normalizeName(row.name));
+          if (!already) d.ignoredProjects = [...(d.ignoredProjects ?? []), row.name];
+          continue;
+        }
+        // Anything placed is no longer dismissed — the two are the same decision
+        // read in opposite directions.
+        d.ignoredProjects = (d.ignoredProjects ?? [])
+          .filter((x) => normalizeName(x) !== normalizeName(row.name));
 
         if (line.action === 'new' || !existing) {
           d.accounts.push(newAccount({
@@ -134,7 +146,8 @@ export default function WeekImport({ period, periods, result, update, onClose }:
     onClose();
   };
 
-  const willDo = (lines ?? []).filter((l) => l.action !== 'skip').length;
+  const willDo = (lines ?? []).filter((l) => l.action !== 'skip' && l.action !== 'ignore').length;
+  const willIgnore = (lines ?? []).filter((l) => l.action === 'ignore').length;
   const unplaced = (lines ?? []).filter((l) => l.action === 'skip' && !l.accountId).length;
 
   return (
@@ -182,8 +195,9 @@ export default function WeekImport({ period, periods, result, update, onClose }:
       {entries && !lines && (
         <>
           <p className="collect-lead">
-            {entries.length} paid week{entries.length === 1 ? '' : 's'} across {weeks.length} payment
-            {weeks.length === 1 ? '' : 's'}. Tick the ones that belong to {period.label}.
+            {weeks.length === 0
+              ? 'Every project in this report has been dismissed, so there is nothing here to add. Un-dismiss one on a later report, or from a month where it was placed.'
+              : `${entries.length} paid week${entries.length === 1 ? '' : 's'} across ${weeks.length} payment${weeks.length === 1 ? '' : 's'}. Tick the ones that belong to ${period.label}.`}
           </p>
           <table className="week-weeks">
             <thead>
@@ -216,10 +230,10 @@ export default function WeekImport({ period, periods, result, update, onClose }:
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={2}>{chosen.size} of {weeks.length} chosen</td>
-                <td className="fig mono">{hoursAsText(weeks.filter((w) => chosen.has(w.week)).reduce((t, w) => t + w.hours, 0))}</td>
-                <td className="fig mono">{fmtUsd(weeks.filter((w) => chosen.has(w.week)).reduce((t, w) => t + w.earned, 0))}</td>
-                <td className="fig mono sub-fig">{fmtUsd(weeks.filter((w) => chosen.has(w.week)).reduce((t, w) => t + w.fee, 0))}</td>
+                <td colSpan={2}>{picked.length} of {weeks.length} chosen</td>
+                <td className="fig mono">{hoursAsText(picked.reduce((t, w) => t + w.hours, 0))}</td>
+                <td className="fig mono">{fmtUsd(picked.reduce((t, w) => t + w.earned, 0))}</td>
+                <td className="fig mono sub-fig">{fmtUsd(picked.reduce((t, w) => t + w.fee, 0))}</td>
               </tr>
             </tfoot>
           </table>
@@ -228,8 +242,8 @@ export default function WeekImport({ period, periods, result, update, onClose }:
               {other.count > 0 && `${other.count} withdrawal line${other.count === 1 ? '' : 's'} totalling ${fmtUsd(other.usd)} — money moved, not earned, so not counted here.`}
             </p>
             <button className="btn" onClick={() => { setEntries(null); setProblems([]); }}>Back</button>
-            <button className="btn primary" onClick={fromReport} disabled={!chosen.size}>
-              Match {chosen.size} week{chosen.size === 1 ? '' : 's'} to clients
+            <button className="btn primary" onClick={fromReport} disabled={!picked.length}>
+              Match {picked.length} week{picked.length === 1 ? '' : 's'} to clients
             </button>
           </div>
         </>
@@ -261,16 +275,18 @@ export default function WeekImport({ period, periods, result, update, onClose }:
                   const account = result.accounts.find((a) => a.account.id === line.accountId);
                   const d = derive(line.row, account?.account.rate ?? 0);
                   const now = account?.units ?? 0;
-                  const after = line.action === 'skip' ? now
-                    : line.action === 'replace' ? line.row.hours
-                      : line.action === 'new' ? line.row.hours
-                        : now + line.row.hours;
+                  // A line that is not being applied leaves the client where it
+                  // is — including a dismissed one, which has no client at all.
+                  const after = line.action === 'skip' || line.action === 'ignore' ? now
+                    : line.action === 'replace' || line.action === 'new' ? line.row.hours
+                      : now + line.row.hours;
                   return (
-                    <tr key={i} className={line.action === 'skip' ? 'week-skip' : undefined}>
+                    <tr key={i} className={line.action === 'skip' || line.action === 'ignore' ? 'week-skip' : undefined}>
                       <td>
                         {line.row.name}
                         {line.matched === 'close' && <span className="tag-inline">close match</span>}
                         {line.matched === 'remembered' && <span className="tag-inline">remembered</span>}
+                        {line.action === 'ignore' && <span className="tag-inline">not our business</span>}
                         {d.disagrees && (
                           <span className="sub warn-text">
                             the money says {hoursAsText(d.hoursFromMoney ?? 0)}, the timesheet says {hoursAsText(line.row.hours)}
@@ -288,15 +304,17 @@ export default function WeekImport({ period, periods, result, update, onClose }:
                         <select
                           className="cell-input"
                           aria-label={`Where ${line.row.name} goes`}
-                          value={line.action === 'new' ? '__new' : line.accountId}
+                          value={line.action === 'new' ? '__new' : line.action === 'ignore' ? '__ignore' : line.accountId}
                           onChange={(e) => {
                             const v = e.target.value;
                             if (v === '__new') set(i, { accountId: '', action: 'new' });
+                            else if (v === '__ignore') set(i, { accountId: '', action: 'ignore' });
                             else if (!v) set(i, { accountId: '', action: 'skip' });
-                            else set(i, { accountId: v, action: line.action === 'skip' || line.action === 'new' ? 'append' : line.action });
+                            else set(i, { accountId: v, action: line.action === 'append' || line.action === 'replace' ? line.action : 'append' });
                           }}
                         >
-                          <option value="">Leave it out</option>
+                          <option value="">Leave it out this once</option>
+                          <option value="__ignore">Never import this project</option>
                           <option value="__new">Add as a new client</option>
                           {period.accounts.map((a: Account) => (
                             <option key={a.id} value={a.id}>{a.name}</option>
@@ -305,8 +323,10 @@ export default function WeekImport({ period, periods, result, update, onClose }:
                       </td>
                       <td className="fig mono sub-fig">{account ? hoursAsText(now) : '—'}</td>
                       <td>
-                        {line.action === 'new'
-                          ? <span className="tag-inline">new client</span>
+                        {line.action === 'ignore'
+                          ? <span className="muted small">dismissed for good</span>
+                          : line.action === 'new'
+                            ? <span className="tag-inline">new client</span>
                           : (
                             <select
                               className="cell-input"
@@ -322,7 +342,7 @@ export default function WeekImport({ period, periods, result, update, onClose }:
                           )}
                       </td>
                       <td className={`fig mono${after !== now ? ' total' : ' sub-fig'}`}>
-                        {hoursAsText(after)}
+                        {line.action === 'ignore' || (!account && after === 0) ? '—' : hoursAsText(after)}
                       </td>
                     </tr>
                   );
@@ -334,11 +354,12 @@ export default function WeekImport({ period, periods, result, update, onClose }:
           <div className="week-actions">
             <p className="settings-note">
               {willDo} of {lines.length} line{lines.length === 1 ? '' : 's'} will be applied
+              {willIgnore > 0 && ` · ${willIgnore} dismissed for good`}
               {unplaced > 0 && ` · ${unplaced} not matched to a client yet`}
               {' · '}rate and fee are taken from the transactions.
             </p>
             <button className="btn" onClick={() => { setLines(null); if (!entries) setProblems([]); }}>Back</button>
-            <button className="btn primary" onClick={apply} disabled={!willDo}>
+            <button className="btn primary" onClick={apply} disabled={!willDo && !willIgnore}>
               Apply to {period.label}
             </button>
           </div>

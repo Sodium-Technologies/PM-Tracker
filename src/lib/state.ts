@@ -34,7 +34,7 @@ export function newPeriod(label: string, usdToPkr = 280): Period {
     // A month started here is typed by hand, on a timesheet's terms.
     timeFormat: 'hm',
     accounts: [], staff: [], reimbursements: [], otherPayables: [], withheld: [],
-    localWages: [], transfers: [], visibility: 'core',
+    localWages: [], transfers: [], visibility: 'core', ignoredProjects: [],
   };
 }
 
@@ -75,6 +75,8 @@ export function rollForward(period: Period, label?: string): Period {
     // A month rolled forward keeps the last one's visibility: hiding January and
     // then finding February shared would be a nasty surprise.
     visibility: period.visibility ?? 'core',
+    // What is none of this ledger's business this month is none of it next.
+    ignoredProjects: [...(period.ignoredProjects ?? [])],
     accounts,
     staff,
     reimbursements: period.reimbursements.map((r) => ({ ...r, id: uid() })),
@@ -109,6 +111,7 @@ export function normalize(state: AppState): AppState {
     p.transfers ??= [];
     p.timeFormat ??= 'decimal';
     p.visibility ??= 'core';
+    p.ignoredProjects ??= [];
     for (const a of p.accounts) {
       a.currency ??= 'USD';
       a.paidDirect ??= false;

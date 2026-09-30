@@ -124,6 +124,10 @@ export interface Period {
   transfers: Transfer[];
   /** Defaults to `core` — shared with the people who run the books. */
   visibility: Visibility;
+  /** Projects on an imported report that are none of this ledger's business —
+   *  another client's contract, a personal one. Recorded once and honoured in
+   *  every month, so the same line never has to be dismissed twice. */
+  ignoredProjects: string[];
 }
 
 export interface AppState {

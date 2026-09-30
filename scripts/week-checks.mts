@@ -116,5 +116,18 @@ is('aliases are gathered from every month', map['bsf'], 'Doug');
 is('a mapping from another month is honoured here',
    findAccount('BSF', [{ id: 'z', name: 'Doug', aliases: [] }] as Account[], map)?.how, 'remembered');
 
+
+/* ---------------------------------------------------------------- dismissing a project */
+import { knownIgnored } from '/home/user/PM-Tracker/src/lib/week';
+
+is('nothing dismissed to begin with', knownIgnored([{}]).size, 0);
+const dismissed = knownIgnored([
+  { ignoredProjects: ['Some Other Client'] },
+  { ignoredProjects: ['Some Other Client', 'A Personal Thing'] },
+]);
+is('dismissals gather from every month, without repeating', dismissed.size, 2);
+is('and match however the name is written', dismissed.has('some other client'), true);
+is('a project nobody dismissed is not dismissed', dismissed.has('post road management llc'), false);
+
 console.log(bad ? `\n${bad} failed overall` : '\nAll week-reading checks passed');
 process.exit(bad ? 1 : 0);

@@ -93,6 +93,19 @@ export function findAccount(
   return close.length === 1 ? { id: close[0].id, how: 'close' } : null;
 }
 
+/** Every project dismissed anywhere in the books, normalised for comparison.
+ *  Dismissing one is a standing decision, not a per-month one. */
+export function knownIgnored(periods: { ignoredProjects?: string[] }[]): Set<string> {
+  const out = new Set<string>();
+  for (const p of periods) {
+    for (const name of p.ignoredProjects ?? []) {
+      const key = normalizeName(name);
+      if (key) out.add(key);
+    }
+  }
+  return out;
+}
+
 /** Every alias recorded anywhere in the books, so a mapping made in one month is
  *  honoured in all of them. */
 export function knownAliases(periods: { accounts: Account[] }[]): Record<string, string> {

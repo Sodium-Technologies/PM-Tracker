@@ -75,6 +75,8 @@ ok('the client is matched on its Upwork name',
    (await page.locator('.week tbody tr').count()) === 1);
 await page.locator('.week tbody tr').first().locator('select').nth(1).selectOption('replace');
 await page.waitForTimeout(200);
+const willHave = await page.locator('.week tbody tr').first().locator('td').last().innerText();
+ok('the row says what the client will end up with', /\d/.test(willHave), willHave);
 await page.getByRole('button', { name: /^Apply to/ }).click();
 await page.waitForTimeout(800);
 
@@ -97,6 +99,35 @@ await page.waitForTimeout(400);
 const augClients = await page.locator('table tbody tr').count();
 ok('August still has its own clients', augClients > 0, `${augClients} rows`);
 ok('no page errors', errors.length === 0, errors.join('; '));
+
+// dismissing a project sticks, and takes its money out of the week totals
+await page.getByRole('button', { name: 'Add a week' }).click();
+await page.waitForTimeout(300);
+await page.locator('.week input[type=file]')
+  .setInputFiles(new URL('./fixtures/upwork-sample.csv', import.meta.url).pathname);
+await page.waitForTimeout(600);
+const totalBefore = (await page.locator('.week-weeks tfoot').innerText()).replace(/\s+/g, ' ');
+await page.getByRole('button', { name: /^Match 2 weeks/ }).click();
+await page.waitForTimeout(400);
+await page.locator('.week tbody tr').first().locator('select').first().selectOption('__ignore');
+await page.waitForTimeout(200);
+ok('a dismissed row says nothing will happen to it',
+   (await page.locator('.week tbody tr').first().locator('td').last().innerText()).trim() === '—');
+await page.getByRole('button', { name: /^Apply to/ }).click();
+await page.waitForTimeout(800);
+
+await page.getByRole('button', { name: 'Add a week' }).click();
+await page.waitForTimeout(300);
+await page.locator('.week input[type=file]')
+  .setInputFiles(new URL('./fixtures/upwork-sample.csv', import.meta.url).pathname);
+await page.waitForTimeout(600);
+const totalAfter = (await page.locator('.week-weeks tfoot').innerText()).replace(/\s+/g, ' ');
+ok('a dismissed project is out of the week totals next time',
+   totalBefore !== totalAfter, `${totalBefore} -> ${totalAfter}`);
+// this fixture has one project, so dismissing it empties the report
+ok('a report with nothing left in it says so, and offers nothing to match',
+   /has been dismissed/.test(await page.locator('.week .collect-lead').innerText())
+   && (await page.getByRole('button', { name: /^Match 0 weeks/ }).isDisabled()));
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nA week stays in its own month');
 await browser.close();

@@ -54,6 +54,13 @@ Then two screens, in order:
 as an alias, honoured in every month from then on and marked *remembered* in the
 review — so the weekly job is: choose the file, tick the weeks, apply.
 
+**So is a dismissal.** A project on the report that is none of this ledger's
+business — somebody else's contract, a personal one — can be set to **Never
+import this project**. It is then left out of the week totals on every later
+report, comes back already dismissed rather than asking again, and is marked
+*not our business* in the review. Pointing it at a client again undoes that:
+placing and dismissing are the same decision read in opposite directions.
+
 Each line then chooses **Add to the month** or **Replace the month** for itself,
 and the last column shows the hours that client will have once applied — so
 applying the same weeks twice is visible before it happens rather than after.
