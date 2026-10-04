@@ -35,16 +35,80 @@ const missingVisibility = (message?: string) =>
 /** A write either fails, or succeeds — possibly with something worth saying. */
 export interface WriteResult { error?: string; warning?: string }
 
+const refusedByPolicy = (message?: string) => !!message && /row-level security/i.test(message);
+
+/** Who the database will take this request to be — read from the token the
+ *  request actually carries, not from what the page remembers about the person.
+ *  When the two disagree, the token is the one that counts. */
+export async function tokenIdentity(): Promise<{ email: string | null; role: string; expiresInMin: number | null }> {
+  if (!supabase) return { email: null, role: 'none', expiresInMin: null };
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return { email: null, role: 'anon', expiresInMin: null };
+  // If the token cannot be read, fall back to the session's own record of who it
+  // belongs to — and claim nothing about whether it has expired.
+  const fallback = { email: data.session?.user?.email ?? null, role: 'unknown', expiresInMin: null };
+  try {
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(part.padEnd(part.length + ((4 - (part.length % 4)) % 4), '=')));
+    return {
+      email: claims.email ?? null,
+      role: claims.role ?? 'unknown',
+      expiresInMin: typeof claims.exp === 'number' ? Math.round((claims.exp * 1000 - Date.now()) / 60000) : null,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+/** Turn a refusal into something a person can act on. */
+async function explainRefusal(original: string): Promise<string> {
+  const who = await tokenIdentity();
+  if (!who.email || who.role === 'anon') {
+    return 'Your sign-in has run out, so the database did not know who was saving. '
+      + 'Sign out and back in — nothing you typed is lost while this page stays open.';
+  }
+  if (who.expiresInMin !== null && who.expiresInMin < 0) {
+    return `Your sign-in as ${who.email} expired ${-who.expiresInMin} min ago. Sign out and back in.`;
+  }
+  // The sign-in is sound. Whether the refusal is about the person or about the
+  // rules depends on what the access list says about this address.
+  const { data } = await supabase!.from('app_users').select('role').eq('email', who.email.toLowerCase());
+  const listed = (data as { role: string }[] | null)?.[0]?.role;
+  if (!listed) {
+    return `${who.email} is not on the access list, so the database will not take a save from it. `
+      + 'Sign in with the address you were given access on.';
+  }
+  if (listed === 'viewer') {
+    return `${who.email} can look but not change, so the database refused the save.`;
+  }
+  return `Signed in as ${who.email} (${listed === 'super_admin' ? 'administrator' : 'editor'}), and the `
+    + "database's rules still refused it — they are out of step with this app. Run "
+    + "supabase/repair-visibility.sql, then notify pgrst, 'reload schema'. (" + original + ')';
+}
+
 async function upsertRows(rows: ReturnType<typeof rowFor>[]): Promise<WriteResult> {
   if (!supabase) return {};
-  const { error } = await supabase.from('periods').upsert(rows, { onConflict: 'id' });
+  let { error } = await supabase.from('periods').upsert(rows, { onConflict: 'id' });
   if (!error) return {};
+
+  // A refusal from the policies most often means the session behind this tab has
+  // lapsed — a phone that slept, a tab left open overnight — while the page still
+  // shows everything it loaded. Refresh it once and try again before saying no.
+  if (refusedByPolicy(error.message)) {
+    await supabase.auth.refreshSession();
+    ({ error } = await supabase.from('periods').upsert(rows, { onConflict: 'id' }));
+    if (!error) return {};
+    if (refusedByPolicy(error.message)) return { error: await explainRefusal(error.message) };
+  }
   if (!missingVisibility(error.message)) return { error: error.message };
 
   const retry = await supabase
     .from('periods')
     .upsert(rows.map(({ visibility: _drop, ...rest }) => rest), { onConflict: 'id' });
-  if (retry.error) return { error: retry.error.message };
+  if (retry.error) {
+    return { error: refusedByPolicy(retry.error.message) ? await explainRefusal(retry.error.message) : retry.error.message };
+  }
 
   // The books are saved, but the column the database reads to decide who may
   // open them was not. The copy inside `data` still says private and the policy

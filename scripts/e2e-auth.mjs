@@ -35,8 +35,17 @@ const ok = (label, cond, detail = '') => {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? ' — ' + detail : ''}`);
 };
 
+// A token shaped like the real thing — header, claims, signature — because the
+// page reads the claims out of it to say who the database took a request for.
+const jwt = (email) => {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({
+    email, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600,
+  })}.stub-signature`;
+};
+
 const session = (email) => ({
-  access_token: 'stub-access-token',
+  access_token: jwt(email),
   token_type: 'bearer',
   expires_in: 3600,
   expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -47,7 +56,11 @@ const session = (email) => ({
 /** Open the app with Supabase stubbed: `role` null means "not on the list".
  *  `down: true` makes every call to the project fail, as an unreachable or
  *  paused project does. */
-async function open({ email, role, periods = [], down = false, path = '', installed = false, oldSchema = false, writes = [] }) {
+async function open({ email, role, periods = [], down = false, path = '', installed = false, oldSchema = false, writes = [], refuse = 0, tokens = [] }) {
+  // `refuse`: how many writes the database turns down as a policy violation
+  // before accepting one. `tokens` collects each refresh, so a test can see one
+  // happened.
+  let refusals = refuse;
   const ctx = await browser.newContext();
   // iOS reports a home-screen app through navigator.standalone; the app reads it
   // to decide that a sign-in link cannot possibly work here.
@@ -79,7 +92,10 @@ async function open({ email, role, periods = [], down = false, path = '', instal
         body: JSON.stringify({ error: 'invalid_grant', error_description: 'Token has expired or is invalid' }),
       });
     }
-    if (url.includes('/auth/v1/token')) return json(session(email ?? 'nobody@example.com'));
+    if (url.includes('/auth/v1/token')) {
+      tokens.push(url);
+      return json(session(email ?? 'nobody@example.com'));
+    }
     if (url.includes('/auth/v1/user')) return json(session(email ?? 'nobody@example.com').user);
     if (url.includes('/auth/v1/logout')) return route.fulfill({ status: 204, body: '' });
     if (url.includes('/rest/v1/app_users')) {
@@ -99,6 +115,13 @@ async function open({ email, role, periods = [], down = false, path = '', instal
               .some((row) => Object.prototype.hasOwnProperty.call(row, 'visibility'));
           } catch { return false; }
         })();
+        if (refusals > 0) {
+          refusals--;
+          return route.fulfill({
+            status: 403, contentType: 'application/json',
+            body: JSON.stringify({ code: '42501', message: 'new row violates row-level security policy for table "periods"' }),
+          });
+        }
         if (oldSchema && sendsColumn) {
           return route.fulfill({
             status: 400, contentType: 'application/json',
@@ -230,6 +253,38 @@ const samplePeriod = {
      /not being enforced on the database side/.test(await page.locator('body').innerText())
      && !/Not saved/.test(await page.locator('.toast').innerText().catch(() => '')),
      (await page.locator('.toast').innerText().catch(() => 'no toast')));
+  await ctx.close();
+}
+
+// 1d. a session that lapsed while the page stayed open
+{
+  const tokens = [];
+  const { page, ctx } = await open({
+    email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod], refuse: 1, tokens,
+  });
+  const before = tokens.length;
+  await page.getByRole('button', { name: 'Revenue' }).click();
+  await page.waitForTimeout(300);
+  await page.locator('table tbody tr').first().locator('input').nth(1).fill('77');
+  await page.waitForTimeout(1800);
+  ok('a policy refusal refreshes the session and tries again', tokens.length > before,
+     `${tokens.length - before} refresh(es)`);
+  ok('and when that cures it, nothing is reported', !/Not saved/.test(await page.locator('body').innerText()));
+  await ctx.close();
+}
+{
+  const { page, ctx } = await open({
+    email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod], refuse: 99,
+  });
+  await page.getByRole('button', { name: 'Revenue' }).click();
+  await page.waitForTimeout(300);
+  await page.locator('table tbody tr').first().locator('input').nth(1).fill('78');
+  await page.waitForTimeout(1800);
+  const said = await page.locator('.toast').innerText().catch(() => '');
+  ok('a refusal a refresh cannot cure names who the database took you for',
+     /nav8khan@gmail\.com/.test(said), said);
+  ok('and, for an administrator, blames the rules rather than the sign-in',
+     /administrator/.test(said) && /repair-visibility/.test(said));
   await ctx.close();
 }
 
