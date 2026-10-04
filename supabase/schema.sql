@@ -118,15 +118,36 @@ $$;
 
 alter table public.periods enable row level security;
 
+-- The visibility a row is actually governed by.
+--
+-- It is written in two places: the column, which the policies read, and a copy
+-- inside `data`, which is what the page last saved. They should agree, and when
+-- they do not this takes the narrower of the two. A write that reaches one and
+-- not the other must never be the one that opens a month up — a setting that
+-- fails has to fail closed, or "only me" quietly means "everybody".
+create or replace function public.effective_visibility(visibility text, data jsonb)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when coalesce(visibility, 'core') = 'private'
+      or coalesce(data ->> 'visibility', 'core') = 'private' then 'private'
+    when coalesce(visibility, 'core') = 'core'
+      or coalesce(data ->> 'visibility', 'core') = 'core' then 'core'
+    else 'public'
+  end
+$$;
+
 -- Who may see a month at all. A private month belongs to the address that
 -- created it and to nobody else — not even another administrator, because
 -- "hidden" that an administrator can undo is not hidden.
-create or replace function public.can_see_period(visibility text, owner_email text)
+create or replace function public.can_see_period(visibility text, owner_email text, data jsonb default null)
 returns boolean
 language sql
 stable
 as $$
-  select case coalesce(visibility, 'core')
+  select case public.effective_visibility(visibility, data)
     when 'public'  then public.member_role() is not null
     when 'core'    then public.member_role() in ('super_admin', 'editor')
     when 'private' then lower(coalesce(owner_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
@@ -137,7 +158,7 @@ $$;
 drop policy if exists periods_select on public.periods;
 create policy periods_select on public.periods
   for select to authenticated
-  using (public.can_see_period(visibility, owner_email));
+  using (public.can_see_period(visibility, owner_email, data));
 
 drop policy if exists periods_insert on public.periods;
 create policy periods_insert on public.periods
@@ -151,7 +172,7 @@ create policy periods_update on public.periods
   for update to authenticated
   using (
     public.member_role() in ('super_admin', 'editor')
-    and public.can_see_period(visibility, owner_email)
+    and public.can_see_period(visibility, owner_email, data)
   )
   with check (public.member_role() in ('super_admin', 'editor'));
 
@@ -160,7 +181,7 @@ create policy periods_delete on public.periods
   for delete to authenticated
   using (
     public.member_role() in ('super_admin', 'editor')
-    and public.can_see_period(visibility, owner_email)
+    and public.can_see_period(visibility, owner_email, data)
   );
 
 -- Stamp who last touched a period, and when.

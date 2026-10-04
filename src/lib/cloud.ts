@@ -32,17 +32,32 @@ const rowFor = (p: Period) => ({
 const missingVisibility = (message?: string) =>
   !!message && /visibility/i.test(message) && /column|schema cache/i.test(message);
 
-async function upsertRows(rows: ReturnType<typeof rowFor>[]): Promise<{ error?: string }> {
+/** A write either fails, or succeeds — possibly with something worth saying. */
+export interface WriteResult { error?: string; warning?: string }
+
+async function upsertRows(rows: ReturnType<typeof rowFor>[]): Promise<WriteResult> {
   if (!supabase) return {};
   const { error } = await supabase.from('periods').upsert(rows, { onConflict: 'id' });
   if (!error) return {};
   if (!missingVisibility(error.message)) return { error: error.message };
+
   const retry = await supabase
     .from('periods')
     .upsert(rows.map(({ visibility: _drop, ...rest }) => rest), { onConflict: 'id' });
-  return retry.error
-    ? { error: retry.error.message }
-    : { error: undefined };
+  if (retry.error) return { error: retry.error.message };
+
+  // The books are saved, but the column the database reads to decide who may
+  // open them was not. The copy inside `data` still says private and the policy
+  // takes the narrower of the two, so nothing is exposed — but a person who
+  // just hid a month is owed the truth about where that setting got to.
+  if (rows.some((r) => r.visibility === 'private')) {
+    return {
+      warning: 'Saved — but this project is missing the visibility column, so who '
+        + 'can open the month is not being enforced on the database side yet. '
+        + 'Run supabase/schema.sql, then reload the schema.',
+    };
+  }
+  return {};
 }
 
 const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -85,7 +100,7 @@ export async function fetchPeriods(): Promise<{ periods: Period[]; error?: strin
   return { periods: sortPeriods(periods) };
 }
 
-export async function savePeriod(period: Period): Promise<{ error?: string }> {
+export async function savePeriod(period: Period): Promise<WriteResult> {
   return upsertRows([rowFor(period)]);
 }
 
@@ -96,7 +111,7 @@ export async function deletePeriod(id: string): Promise<{ error?: string }> {
 }
 
 /** Push a whole set of periods — used once, to move existing books up. */
-export async function uploadPeriods(periods: Period[]): Promise<{ error?: string }> {
+export async function uploadPeriods(periods: Period[]): Promise<WriteResult> {
   return upsertRows(periods.map(rowFor));
 }
 

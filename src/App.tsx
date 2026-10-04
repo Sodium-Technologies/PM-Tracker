@@ -178,8 +178,9 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
             const toSave = pending.current;
             pending.current = null;
             if (!toSave) return;
-            const { error } = await cloud.savePeriod(toSave);
+            const { error, warning } = await cloud.savePeriod(toSave);
             if (error) setToast(`Not saved: ${error}`);
+            else if (warning) setToast(warning);
           }, 600);
         }
         return draft;

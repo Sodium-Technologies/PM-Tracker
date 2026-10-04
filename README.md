@@ -126,7 +126,14 @@ Two consequences worth knowing:
 - Whoever creates a month owns it. If somebody else needs to be able to hide
   work, it has to be a month they made.
 - A month nobody may see is a month nobody may change: an editor cannot write
-  over a private month it cannot read.
+  over a private month it cannot read, nor delete it.
+
+Visibility is written twice — the column the policies read, and a copy inside
+the month itself — and the database takes **the narrower of the two**. A write
+that reaches one and not the other therefore cannot be the one that opens a
+month up. The page says so too: hiding a month on a project whose schema is out
+of date reports that the setting has not reached the database, rather than
+looking like it worked.
 
 Re-run `supabase/schema.sql` after updating — it adds the two columns and the
 policies, and claims every existing month for the first administrator, so none
@@ -374,7 +381,15 @@ browser and never reaches the web.
 ```bash
 npm run build && node scripts/e2e-week.mjs   # a week stays in its own month
 npx tsx scripts/week-checks.mts              # reading a pasted week
+./scripts/rls-checks.sh                      # a private month is private
 ```
+
+`rls-checks.sh` runs `supabase/schema.sql` unchanged against a throwaway
+Postgres, with `auth.jwt()` faked from a setting exactly as Supabase builds it,
+and then asks the database itself who can see what. It is the only test here
+that proves anything about privacy: everything else stubs Supabase at the
+network boundary, which proves what the page does with an answer, never what the
+database decides.
 
 
 `scripts/e2e.mjs` drives the built app in a real browser: it imports a

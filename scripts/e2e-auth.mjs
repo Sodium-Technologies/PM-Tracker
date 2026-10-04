@@ -221,6 +221,13 @@ const samplePeriod = {
      writes.some((w) => w.includes('"visibility"')));
   ok('and the books are not reported as lost',
      !/Not saved/.test(await page.locator('body').innerText()));
+  // Hiding a month is not something to fail quietly at.
+  await page.locator('#visibility').selectOption('private');
+  await page.waitForTimeout(1500);
+  ok('but hiding a month that could not be hidden says so, and does not call it a failure',
+     /not being enforced on the database side/.test(await page.locator('body').innerText())
+     && !/Not saved/.test(await page.locator('.toast').innerText().catch(() => '')),
+     (await page.locator('.toast').innerText().catch(() => 'no toast')));
   await ctx.close();
 }
 
