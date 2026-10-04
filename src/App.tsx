@@ -457,7 +457,14 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
                   <select id="visibility" className={`cell-input seen seen-${period.visibility ?? 'core'}`}
                     value={period.visibility ?? 'core'}
                     onChange={(e) => update((d) => { d.visibility = e.target.value as Period['visibility']; })}>
-                    <option value="private">Only me</option>
+                    {/* Hiding a month is an administrator's decision, and the
+                        database refuses it from anyone else — so it is not
+                        offered to anyone else either. It stays listed for a
+                        month that is already hidden, or the box would silently
+                        misdescribe what it is looking at. */}
+                    {(auth.isSuperAdmin || !cloudEnabled || period.visibility === 'private') && (
+                      <option value="private">Only me</option>
+                    )}
                     <option value="core">Core — admins and editors</option>
                     <option value="public">Everyone with access</option>
                   </select>

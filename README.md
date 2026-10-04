@@ -107,7 +107,7 @@ Each month carries a **Seen by** setting, in the bar beside Duplicate and Delete
 
 | | Who opens it |
 |---|---|
-| **Only me** | the address that created the month, and nobody else — not another administrator either |
+| **Only me** | the address that created the month, and nobody else — not another administrator either. Only an administrator may set this; an editor keeps the books but does not get to put a month out of the administrator's sight, and is not offered the option |
 | **Core** | administrators and editors *(the default)* |
 | **Everyone with access** | anyone on the access list, viewers included |
 

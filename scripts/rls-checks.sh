@@ -106,4 +106,27 @@ if [ "$(truth "select label from public.periods where id = 'public';")" = "publi
 else echo "FAIL  a viewer wrote to the books"; fails=$((fails+1)); fi
 
 echo
+echo "— who may hide a month —"
+mutate owner@example.com "update public.periods set visibility = 'private', data = jsonb_build_object('visibility','private') where id = 'public'"
+if [ "$(truth "select visibility from public.periods where id = 'public';")" = "private" ]; then
+  echo "PASS  an administrator can hide a month"
+else echo "FAIL  an administrator could not hide a month"; fails=$((fails+1)); fi
+mutate owner@example.com "update public.periods set visibility = 'public', data = jsonb_build_object('visibility','public') where id = 'public'"
+
+mutate editor@example.com "update public.periods set visibility = 'private', data = jsonb_build_object('visibility','private') where id = 'public'"
+if [ "$(truth "select visibility from public.periods where id = 'public';")" = "public" ]; then
+  echo "PASS  an editor cannot"
+else echo "FAIL  an editor hid a month from the administrator"; fails=$((fails+1)); fi
+
+mutate editor@example.com "insert into public.periods(id,label,data,visibility) values ('smuggled','smuggled',jsonb_build_object('visibility','private'),'core')"
+if [ "$(truth "select count(*) from public.periods where id = 'smuggled';")" = "0" ]; then
+  echo "PASS  nor smuggle one in with the column saying otherwise"
+else echo "FAIL  an editor created a private month"; fails=$((fails+1)); fi
+
+mutate editor@example.com "update public.periods set label = 'edited' where id = 'public'"
+if [ "$(truth "select label from public.periods where id = 'public';")" = "edited" ]; then
+  echo "PASS  but an editor can still keep the books"
+else echo "FAIL  an editor could not edit a month"; fails=$((fails+1)); fi
+
+echo
 [ "$fails" = "0" ] && echo "A private month is private." || { echo "$fails check(s) failed"; exit 1; }

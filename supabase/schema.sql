@@ -15,6 +15,9 @@
 --   core      super_admin and editor
 --   public    everyone with access, viewer included
 --
+-- Only a super_admin may set a month to private. An editor keeps the books; an
+-- editor does not get to put a month out of the administrator's sight.
+--
 -- Both are enforced by row-level security in the database, not by the page: a
 -- viewer calling the API directly still cannot write, an address that is not
 -- listed here reads nothing at all, and a private month is not returned to
@@ -160,10 +163,26 @@ create policy periods_select on public.periods
   for select to authenticated
   using (public.can_see_period(visibility, owner_email, data));
 
+-- Hiding a month from everyone else is an administrator's decision. An editor
+-- may keep the books; they may not take a month out of the administrator's
+-- sight. Checked here rather than in the page, or anyone could do it by calling
+-- the API directly.
+create or replace function public.may_set_visibility(visibility text, data jsonb default null)
+returns boolean
+language sql
+stable
+as $$
+  select public.effective_visibility(visibility, data) <> 'private'
+      or public.member_role() = 'super_admin'
+$$;
+
 drop policy if exists periods_insert on public.periods;
 create policy periods_insert on public.periods
   for insert to authenticated
-  with check (public.member_role() in ('super_admin', 'editor'));
+  with check (
+    public.member_role() in ('super_admin', 'editor')
+    and public.may_set_visibility(visibility, data)
+  );
 
 -- A month nobody may see is a month nobody may change: without the `using`
 -- clause an editor could write over a private month it cannot read.
@@ -174,7 +193,10 @@ create policy periods_update on public.periods
     public.member_role() in ('super_admin', 'editor')
     and public.can_see_period(visibility, owner_email, data)
   )
-  with check (public.member_role() in ('super_admin', 'editor'));
+  with check (
+    public.member_role() in ('super_admin', 'editor')
+    and public.may_set_visibility(visibility, data)
+  );
 
 drop policy if exists periods_delete on public.periods;
 create policy periods_delete on public.periods

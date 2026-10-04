@@ -201,8 +201,10 @@ const samplePeriod = {
 // 1c. a project that has not run the latest schema still saves the books
 {
   const writes = [];
+  // An administrator, because the case ends by hiding a month — which only an
+  // administrator may do.
   const { page, ctx } = await open({
-    email: 'editor@company.com', role: 'editor', periods: [samplePeriod], oldSchema: true, writes,
+    email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod], oldSchema: true, writes,
   });
   await page.getByRole('button', { name: 'Revenue' }).click();
   await page.waitForTimeout(300);
@@ -285,8 +287,8 @@ const samplePeriod = {
   ok('editor gets New period', (await page.getByRole('button', { name: 'Start a new month' }).count()) === 1);
   ok('editor can set who sees a month', await page.locator('#visibility').isVisible());
   ok('a month defaults to the core team', (await page.locator('#visibility').inputValue()) === 'core');
-  ok('the three levels are offered',
-     (await page.locator('#visibility option').allInnerTexts()).length === 3,
+  ok('an editor is not offered hiding a month',
+     !(await page.locator('#visibility option').allInnerTexts()).some((t) => /Only me/.test(t)),
      (await page.locator('#visibility option').allInnerTexts()).join(', '));
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.waitForTimeout(300);
@@ -304,6 +306,10 @@ const samplePeriod = {
 {
   const { page, ctx, errors } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod] });
   ok('administrator is labelled administrator', (await page.locator('.role').innerText()).trim() === 'Runs it');
+  ok('an administrator is offered all three levels',
+     (await page.locator('#visibility option').allInnerTexts()).join(', ')
+       === 'Only me, Core — admins and editors, Everyone with access',
+     (await page.locator('#visibility option').allInnerTexts()).join(', '));
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.waitForTimeout(400);
   ok('administrator gets the access panel in settings', await page.locator('#grant-email').isVisible());
