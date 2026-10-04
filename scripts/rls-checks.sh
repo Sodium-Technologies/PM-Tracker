@@ -4,8 +4,10 @@ set -euo pipefail
 PORT=${PGPORT:-5499}
 Q() { psql -h /tmp -p "$PORT" -U postgres -X -q -t -A "$@"; }
 
-Q -f scripts/rls-checks.sql >/dev/null
-Q -f supabase/schema.sql >/dev/null
+# Errors are fatal here. psql carries on past a failed statement by default,
+# which once hid a broken upgrade behind a wall of passing checks.
+psql -h /tmp -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -f scripts/rls-checks.sql >/dev/null
+psql -h /tmp -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -f supabase/schema.sql >/dev/null
 Q -c "grant all on all tables in schema public to authenticated;" >/dev/null
 Q -c "grant execute on all functions in schema public to authenticated;" >/dev/null
 

@@ -145,7 +145,19 @@ $$;
 -- Who may see a month at all. A private month belongs to the address that
 -- created it and to nobody else — not even another administrator, because
 -- "hidden" that an administrator can undo is not hidden.
-create or replace function public.can_see_period(visibility text, owner_email text, data jsonb default null)
+--
+-- An earlier version of this took two arguments and could not see the copy of
+-- the visibility kept inside the month. `create or replace` leaves that one
+-- alongside this one rather than replacing it, so it is dropped by name — a
+-- superseded function that still decides who sees what is worth being rid of.
+-- The policies have to let go of it first, which is why they are dropped here
+-- rather than beside the ones that replace them further down.
+drop policy if exists periods_select on public.periods;
+drop policy if exists periods_update on public.periods;
+drop policy if exists periods_delete on public.periods;
+drop function if exists public.can_see_period(text, text);
+
+create or replace function public.can_see_period(visibility text, owner_email text, data jsonb)
 returns boolean
 language sql
 stable
