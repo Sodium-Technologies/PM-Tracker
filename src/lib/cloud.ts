@@ -84,7 +84,8 @@ async function explainRefusal(original: string): Promise<string> {
   }
   return `Signed in as ${who.email} (${listed === 'super_admin' ? 'administrator' : 'editor'}), and the `
     + "database's rules still refused it — they are out of step with this app. Run "
-    + "supabase/repair-visibility.sql, then notify pgrst, 'reload schema'. (" + original + ')';
+    + "supabase/fix-owner-trigger.sql, then supabase/repair-visibility.sql, then notify pgrst, "
+    + "'reload schema'. (" + original + ')';
 }
 
 async function upsertRows(rows: ReturnType<typeof rowFor>[]): Promise<WriteResult> {

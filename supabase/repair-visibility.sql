@@ -1,5 +1,6 @@
 -- Repairs a project where the visibility functions did not get created.
--- Safe to run more than once.
+-- Safe to run more than once. The last line should read 1 | 1 | 1 | 4 | 1 | 0;
+-- an owner_trigger of 0 means "Only me" will be refused for everyone.
 
 create or replace function public.effective_visibility(visibility text, data jsonb)
 returns text language sql immutable as $fn_vis$
@@ -121,4 +122,6 @@ select
   (select count(*) from pg_proc where proname = 'can_see_period')       as can_see_period,
   (select count(*) from pg_proc where proname = 'may_set_visibility')   as may_set_visibility,
   (select count(*) from pg_policies where tablename = 'periods')        as period_policies,
+  (select count(*) from pg_trigger t join pg_proc f on f.oid = t.tgfoid
+    where t.tgname = 'periods_touch' and f.prosrc like '%owner_email%')  as owner_trigger,
   (select count(*) from public.periods where owner_email is null)       as months_with_no_owner;
