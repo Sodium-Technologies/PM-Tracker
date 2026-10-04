@@ -28,6 +28,10 @@ returns boolean language sql stable as $fn_see$
   end
 $fn_see$;
 
+-- Dropped by name, not replaced: an earlier version gave `data` a default, and
+-- `create or replace` will not take a default away. The policies that use it are
+-- dropped further up, so this is free to go.
+drop function if exists public.may_set_visibility(text, jsonb);
 create or replace function public.may_set_visibility(visibility text, data jsonb)
 returns boolean language sql stable as $fn_may$
   select public.effective_visibility(visibility, data) <> 'private'
@@ -63,8 +67,20 @@ create policy periods_delete on public.periods
     and public.can_see_period(visibility, owner_email, data)
   );
 
+-- A private month with no owner is private to nobody: it cannot be read, and it
+-- cannot be written either, because the policy that governs an update has to be
+-- able to see the row first. Anything left without an owner goes to the first
+-- administrator, which is the only address the database can work out by itself.
+update public.periods p
+set owner_email = (
+  select u.email from public.app_users u
+  where u.role = 'super_admin' order by u.created_at limit 1
+)
+where p.owner_email is null;
+
 select
   (select count(*) from pg_proc where proname = 'effective_visibility') as effective_visibility,
   (select count(*) from pg_proc where proname = 'can_see_period')       as can_see_period,
   (select count(*) from pg_proc where proname = 'may_set_visibility')   as may_set_visibility,
-  (select count(*) from pg_policies where tablename = 'periods')        as period_policies;
+  (select count(*) from pg_policies where tablename = 'periods')        as period_policies,
+  (select count(*) from public.periods where owner_email is null)       as months_with_no_owner;

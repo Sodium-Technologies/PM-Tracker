@@ -112,7 +112,25 @@ export async function deletePeriod(id: string): Promise<{ error?: string }> {
 
 /** Push a whole set of periods — used once, to move existing books up. */
 export async function uploadPeriods(periods: Period[]): Promise<WriteResult> {
-  return upsertRows(periods.map(rowFor));
+  const all = await upsertRows(periods.map(rowFor));
+  if (!all.error) return all;
+
+  // One month the database refuses sinks the whole batch, and the message names
+  // the table rather than the month — so the months that can be written are
+  // written one at a time, and the ones that cannot are named.
+  const refused: string[] = [];
+  let warning: string | undefined;
+  for (const p of periods) {
+    const one = await upsertRows([rowFor(p)]);
+    if (one.error) refused.push(p.label);
+    if (one.warning) warning = one.warning;
+  }
+  if (!refused.length) return { warning };
+  return {
+    error: refused.length === periods.length
+      ? all.error
+      : `Saved all but ${refused.join(', ')} — the database refused ${refused.length === 1 ? 'that month' : 'those months'}: ${all.error}`,
+  };
 }
 
 /** Live updates from anyone else editing. Returns an unsubscribe function. */

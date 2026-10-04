@@ -153,6 +153,7 @@ $fn_vis$;
 -- The policies have to let go of it first, which is why they are dropped here
 -- rather than beside the ones that replace them further down.
 drop policy if exists periods_select on public.periods;
+drop policy if exists periods_insert on public.periods;
 drop policy if exists periods_update on public.periods;
 drop policy if exists periods_delete on public.periods;
 drop function if exists public.can_see_period(text, text);
@@ -179,7 +180,11 @@ create policy periods_select on public.periods
 -- may keep the books; they may not take a month out of the administrator's
 -- sight. Checked here rather than in the page, or anyone could do it by calling
 -- the API directly.
-create or replace function public.may_set_visibility(visibility text, data jsonb default null)
+-- Dropped by name, not replaced: an earlier version gave `data` a default, and
+-- `create or replace` will not take a default away. The policies that use it are
+-- dropped further up, so this is free to go.
+drop function if exists public.may_set_visibility(text, jsonb);
+create or replace function public.may_set_visibility(visibility text, data jsonb)
 returns boolean
 language sql
 stable
