@@ -54,12 +54,12 @@ language sql
 stable
 security definer
 set search_path = public
-as $$
+as $fn_role$
   select u.role
   from public.app_users u
   where lower(u.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
   limit 1
-$$;
+$fn_role$;
 
 revoke all on function public.member_role() from public;
 grant execute on function public.member_role() to authenticated;
@@ -132,7 +132,7 @@ create or replace function public.effective_visibility(visibility text, data jso
 returns text
 language sql
 immutable
-as $$
+as $fn_vis$
   select case
     when coalesce(visibility, 'core') = 'private'
       or coalesce(data ->> 'visibility', 'core') = 'private' then 'private'
@@ -140,7 +140,7 @@ as $$
       or coalesce(data ->> 'visibility', 'core') = 'core' then 'core'
     else 'public'
   end
-$$;
+$fn_vis$;
 
 -- Who may see a month at all. A private month belongs to the address that
 -- created it and to nobody else — not even another administrator, because
@@ -161,14 +161,14 @@ create or replace function public.can_see_period(visibility text, owner_email te
 returns boolean
 language sql
 stable
-as $$
+as $fn_see$
   select case public.effective_visibility(visibility, data)
     when 'public'  then public.member_role() is not null
     when 'core'    then public.member_role() in ('super_admin', 'editor')
     when 'private' then lower(coalesce(owner_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
     else false
   end
-$$;
+$fn_see$;
 
 drop policy if exists periods_select on public.periods;
 create policy periods_select on public.periods
@@ -183,10 +183,10 @@ create or replace function public.may_set_visibility(visibility text, data jsonb
 returns boolean
 language sql
 stable
-as $$
+as $fn_may$
   select public.effective_visibility(visibility, data) <> 'private'
       or public.member_role() = 'super_admin'
-$$;
+$fn_may$;
 
 drop policy if exists periods_insert on public.periods;
 create policy periods_insert on public.periods
@@ -222,7 +222,7 @@ create policy periods_delete on public.periods
 create or replace function public.touch_updated_at()
 returns trigger
 language plpgsql
-as $$
+as $fn_touch$
 begin
   new.updated_at := now();
   new.updated_by := coalesce(auth.jwt() ->> 'email', new.updated_by);
@@ -239,7 +239,7 @@ begin
   end if;
   return new;
 end
-$$;
+$fn_touch$;
 
 drop trigger if exists periods_touch on public.periods;
 create trigger periods_touch
