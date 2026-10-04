@@ -56,7 +56,7 @@ const session = (email) => ({
 /** Open the app with Supabase stubbed: `role` null means "not on the list".
  *  `down: true` makes every call to the project fail, as an unreachable or
  *  paused project does. */
-async function open({ email, role, periods = [], down = false, path = '', installed = false, oldSchema = false, writes = [], refuse = 0, tokens = [] }) {
+async function open({ email, role, staffName = null, periods = [], teamPay = [], teamWrites = [], periodReads = [], down = false, path = '', installed = false, oldSchema = false, writes = [], refuse = 0, tokens = [] }) {
   // `refuse`: how many writes the database turns down as a policy violation
   // before accepting one. `tokens` collects each refresh, so a test can see one
   // happened.
@@ -100,9 +100,17 @@ async function open({ email, role, periods = [], down = false, path = '', instal
     if (url.includes('/auth/v1/logout')) return route.fulfill({ status: 204, body: '' });
     if (url.includes('/rest/v1/app_users')) {
       if (route.request().method() !== 'GET') return json([]);
-      return json(role ? [{ email, role, created_at: '2026-01-01' }] : []);
+      return json(role ? [{ email, role, staff_name: staffName, created_at: '2026-01-01' }] : []);
+    }
+    if (url.includes('/rest/v1/team_pay')) {
+      if (route.request().method() !== 'GET') {
+        teamWrites.push({ method: route.request().method(), url, body: route.request().postData() ?? '' });
+        return json([]);
+      }
+      return json(teamPay);
     }
     if (url.includes('/rest/v1/periods')) {
+      if (route.request().method() === 'GET') periodReads.push(url);
       if (route.request().method() !== 'GET') {
         // Stand in for a project that has not run the latest schema: the first
         // write, carrying `visibility`, is rejected the way PostgREST rejects it.
@@ -284,7 +292,7 @@ const samplePeriod = {
   ok('a refusal a refresh cannot cure names who the database took you for',
      /nav8khan@gmail\.com/.test(said), said);
   ok('and, for an administrator, blames the rules rather than the sign-in',
-     /administrator/.test(said) && /repair-visibility/.test(said));
+     /super admin/.test(said) && /repair-visibility/.test(said));
   await ctx.close();
 }
 
@@ -297,48 +305,44 @@ const samplePeriod = {
   await ctx.close();
 }
 
-// 3. viewer
+// 3. team member
 {
-  const { page, ctx, errors } = await open({ email: 'partner@company.com', role: 'viewer', periods: [samplePeriod] });
-  ok('viewer sees the books', (await page.locator('.figure').count()) > 0);
-  ok('viewer sees the shared period', (await page.locator('.period-name').inputValue()) === 'September 2026');
-  ok('viewer is labelled view only', (await page.locator('.role').innerText()).trim() === 'Can look');
-  ok('viewer gets no New period button', (await page.getByRole('button', { name: 'Start a new month' }).count()) === 0);
-  await page.getByRole('button', { name: 'Settings' }).click();
-  await page.waitForTimeout(300);
-  ok('viewer gets no Import button', (await page.getByRole('button', { name: /Load a sheet/ }).count()) === 0);
-  ok('viewer can still save a backup', (await page.getByRole('button', { name: 'Save a backup' }).count()) === 1);
-  ok('viewer gets no access panel from settings', (await page.locator('#grant-email').count()) === 0);
-  await page.getByRole('button', { name: /Back to/ }).click();
-  await page.waitForTimeout(300);
-  ok('viewer gets no Delete button', (await page.getByRole('button', { name: 'Delete' }).count()) === 0);
-  ok('viewer is not offered undo', (await page.getByRole('button', { name: /^Undo/ }).count()) === 0);
-  ok('viewer sees the view-only badge', await page.locator('.readonly-badge').isVisible());
-  ok('a viewer cannot change who sees a month', (await page.locator('#visibility').count()) === 0);
-  ok('a viewer is told who a month is shared with', await page.locator('.seen-badge').isVisible());
-  ok('viewer lands on the summary', (await page.locator('.tab.active').innerText()) === 'Summary');
-  ok('the summary stays on this month only', (await page.locator('.chart').count()) === 0);
-  ok('the analysis sits outside the months',
-     (await page.locator('.rail-nav .rail-link').allInnerTexts()).join('|') === 'Dashboard|Settings');
-  ok('the month tabs carry no analysis',
-    (await page.locator('.tab').allInnerTexts()).join('|') === 'Summary|Revenue|Payrolls|Distributions');
-  await page.getByRole('button', { name: 'Revenue' }).click();
-  await page.waitForTimeout(300);
-  const rate = page.locator('table tbody tr').first().locator('input').nth(2);
-  ok('figure inputs are locked for a viewer', await rate.getAttribute('readonly') !== null);
-  const before = await rate.inputValue();
-  await rate.fill('999').catch(() => {});
-  ok('a viewer cannot change a figure', (await rate.inputValue()) === before,
-     `was ${before}, now ${await rate.inputValue()}`);
-  ok('viewer can still export', (await page.getByRole('button', { name: 'Download as Excel' }).count()) === 1);
-  ok('no page errors for a viewer', errors.length === 0, errors.join('; '));
+  const periodReads = [];
+  const summary = {
+    label: 'September 2026', name: 'Naveed', usdToPkr: 280,
+    projects: [{ name: 'Luxe', hours: 80, sharePct: 100, earnedPkr: 112000, earnedUsd: 400 }],
+    sharePkr: 112000, adjustmentPkr: 0, payPkr: 112000, payUsd: 400, takenPkr: 12000, stillOwedPkr: 100000,
+  };
+  const { page, ctx, errors } = await open({
+    email: 'partner@company.com', role: 'viewer', staffName: 'Naveed', periods: [samplePeriod],
+    teamPay: [{ period_id: 'p1', label: 'September 2026', summary }], periodReads,
+  });
+  await page.waitForTimeout(500);
+  ok('a team member is labelled Team', (await page.locator('.role').innerText()).trim() === 'Team');
+  ok('a team member never asks for the books', periodReads.length === 0, periodReads.join(', '));
+  ok('a team member sees their own pay', /112,000/.test(await page.locator('.team-sheet').innerText()));
+  ok('and the projects it came from', /Luxe/.test(await page.locator('.team-sheet').innerText()));
+  ok('and what is still owed', /100,000/.test(await page.locator('.team-sheet').innerText()));
+  ok('a team member gets no month list, settings or tabs',
+     (await page.locator('.period-list, .rail-nav, .tabs, #grant-email').count()) === 0);
+  ok('a team member gets no way to change anything',
+     (await page.locator('.team-sheet input').count()) === 0);
+  ok('no page errors for a team member', errors.length === 0, errors.join('; '));
+  await ctx.close();
+}
+
+{
+  const { page, ctx } = await open({ email: 'partner@company.com', role: 'viewer', staffName: null, periods: [samplePeriod] });
+  await page.waitForTimeout(500);
+  ok('a team member with no person is told why they see nothing',
+     /isn't linked/.test(await page.locator('.team-sheet').innerText()));
   await ctx.close();
 }
 
 // 4. editor
 {
   const { page, ctx } = await open({ email: 'editor@company.com', role: 'editor', periods: [samplePeriod] });
-  ok('editor is labelled can edit', (await page.locator('.role').innerText()).trim() === 'Can change');
+  ok('editor is labelled can edit', (await page.locator('.role').innerText()).trim() === 'Admin');
   ok('editor gets New period', (await page.getByRole('button', { name: 'Start a new month' }).count()) === 1);
   ok('editor can set who sees a month', await page.locator('#visibility').isVisible());
   ok('a month defaults to the core team', (await page.locator('#visibility').inputValue()) === 'core');
@@ -359,11 +363,17 @@ const samplePeriod = {
 
 // 5. super admin
 {
-  const { page, ctx, errors } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod] });
-  ok('administrator is labelled administrator', (await page.locator('.role').innerText()).trim() === 'Runs it');
+  const teamWrites = [];
+  const { page, ctx, errors } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod], teamWrites });
+  await page.waitForTimeout(500);
+  const published = teamWrites.find((w) => w.method === 'POST');
+  ok("opening the books publishes each person's pay to the team", !!published);
+  ok('what is published carries no client rate or revenue',
+     !!published && !/"rate"|grossUsd|freelancerPct|feePct|companyPkr/.test(published.body), published?.body.slice(0, 200));
+  ok('administrator is labelled administrator', (await page.locator('.role').innerText()).trim() === 'Super admin');
   ok('an administrator is offered all three levels',
      (await page.locator('#visibility option').allInnerTexts()).join(', ')
-       === 'Only me, Core — admins and editors, Everyone with access',
+       === 'Only me, Core — admins only, Team — each sees their own pay',
      (await page.locator('#visibility option').allInnerTexts()).join(', '));
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.waitForTimeout(400);
@@ -373,6 +383,12 @@ const samplePeriod = {
   ok('access tab lists the three levels',
     (await page.locator('.settle .row').count()) === 3,
     (await page.locator('.settle dt').allInnerTexts()).join(', '));
+  await page.locator('select[aria-label="Access level"]').selectOption('viewer');
+  ok('adding a team member asks which person they are', await page.locator('#grant-person').isVisible());
+  ok('the people offered are the ones on the payroll',
+     (await page.locator('#grant-person option').allInnerTexts()).join('|') === 'Which person?|Naveed');
+  ok('a team member cannot be let in without a person',
+     await page.getByRole('button', { name: 'Let them in' }).isDisabled());
   ok('administrator cannot change their own row',
     await page.locator('table tbody tr').first().locator('select').isDisabled());
   ok('no page errors for an administrator', errors.length === 0, errors.join('; '));

@@ -1,6 +1,7 @@
 import type { AppState, Period } from './types';
 import { normalize } from './state';
 import { supabase } from './supabase';
+import { publishTeamPay } from './team';
 
 /** One row per period: writes stay small, and two editors working on different
  *  months never overwrite one another. */
@@ -80,9 +81,9 @@ async function explainRefusal(original: string): Promise<string> {
       + 'Sign in with the address you were given access on.';
   }
   if (listed === 'viewer') {
-    return `${who.email} can look but not change, so the database refused the save.`;
+    return `${who.email} is on the team, and the team cannot change the books, so the database refused the save.`;
   }
-  return `Signed in as ${who.email} (${listed === 'super_admin' ? 'administrator' : 'editor'}), and the `
+  return `Signed in as ${who.email} (${listed === 'super_admin' ? 'super admin' : 'admin'}), and the `
     + "database's rules still refused it — they are out of step with this app. Run "
     + "supabase/fix-owner-trigger.sql, then supabase/repair-visibility.sql, then notify pgrst, "
     + "'reload schema'. (" + original + ')';
@@ -165,9 +166,22 @@ export async function fetchPeriods(): Promise<{ periods: Period[]; error?: strin
   return { periods: sortPeriods(periods) };
 }
 
-export async function savePeriod(period: Period): Promise<WriteResult> {
-  return upsertRows([rowFor(period)]);
+/** After the books are saved, each person's own summary goes to the team.
+ *  A failure there is said, but the books themselves are saved. */
+async function withTeamPay(periods: Period[], result: WriteResult): Promise<WriteResult> {
+  if (result.error) return result;
+  const { error } = await publishTeamPay(periods);
+  if (error) return { warning: `Saved — but the team's view of their pay was not updated: ${error}` };
+  return result;
 }
+
+export async function savePeriod(period: Period): Promise<WriteResult> {
+  return withTeamPay([period], await upsertRows([rowFor(period)]));
+}
+
+/** Bring every team summary up to date — for months saved before the team view
+ *  existed, or by an older version of the app. */
+export const syncTeamPay = (periods: Period[]) => publishTeamPay(periods);
 
 export async function deletePeriod(id: string): Promise<{ error?: string }> {
   if (!supabase) return {};
@@ -178,7 +192,7 @@ export async function deletePeriod(id: string): Promise<{ error?: string }> {
 /** Push a whole set of periods — used once, to move existing books up. */
 export async function uploadPeriods(periods: Period[]): Promise<WriteResult> {
   const all = await upsertRows(periods.map(rowFor));
-  if (!all.error) return all;
+  if (!all.error) return withTeamPay(periods, all);
 
   // One month the database refuses sinks the whole batch, and the message names
   // the table rather than the month — so the months that can be written are
@@ -190,7 +204,7 @@ export async function uploadPeriods(periods: Period[]): Promise<WriteResult> {
     if (one.error) refused.push(p.label);
     if (one.warning) warning = one.warning;
   }
-  if (!refused.length) return { warning };
+  if (!refused.length) return withTeamPay(periods, { warning });
   return {
     error: refused.length === periods.length
       ? all.error

@@ -16,7 +16,8 @@ import Ledger from './components/Ledger';
 import Mark from './components/Mark';
 import { useNewerVersion } from './lib/freshness';
 import Overview from './components/Overview';
-import People from './components/People';
+import People, { roleName } from './components/People';
+import TeamView from './components/TeamView';
 import SignIn from './components/SignIn';
 import { NumberInput } from './components/Fields';
 
@@ -35,6 +36,10 @@ export default function App() {
     if (auth.error) return <SignIn configError={auth.error} />;
     if (!auth.session) return <SignIn />;
     if (!auth.role) return <SignIn email={auth.email} noAccess onSignOut={auth.signOut} />;
+    // The team never loads the books — the database would send none anyway.
+    if (auth.role === 'viewer') {
+      return <TeamView email={auth.email} staffName={auth.staffName} onSignOut={auth.signOut} />;
+    }
   }
   return <Payroll auth={auth} />;
 }
@@ -142,12 +147,20 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
   }, [toast]);
 
   // Shared books: read from the database, and follow anyone else's edits.
+  const teamSynced = React.useRef(false);
   const reload = React.useCallback(async () => {
     const { periods, error } = await cloud.fetchPeriods();
     if (error) { setToast(error); setSyncing(false); return; }
     setState((s) => (periods.length ? cloud.stateFrom(periods, s.activePeriodId) : s));
     setSyncing(false);
-  }, []);
+    // Once per visit, bring the team's view of every month up to date, so months
+    // saved before the team existed show up for them too.
+    if (canEdit && !teamSynced.current && periods.length) {
+      teamSynced.current = true;
+      const { error: teamError } = await cloud.syncTeamPay(periods);
+      if (teamError) setToast(`The team's view of their pay was not updated: ${teamError}`);
+    }
+  }, [canEdit]);
 
   React.useEffect(() => {
     if (!cloudEnabled) return;
@@ -435,7 +448,11 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
                 {auth.isSuperAdmin && (
                   <div className="span-2">
-                    <People me={auth.email} onChanged={auth.refreshRole} />
+                    <People me={auth.email} onChanged={auth.refreshRole}
+                      people={[...new Map(state.periods.flatMap((p) => p.staff)
+                        .filter((m) => m.name.trim())
+                        .map((m) => [m.name.trim().toLowerCase(), m.name.trim()])).values()]
+                        .sort((a, b) => a.localeCompare(b))} />
                   </div>
                 )}
               </div>
@@ -478,8 +495,8 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
                     {(auth.isSuperAdmin || !cloudEnabled || period.visibility === 'private') && (
                       <option value="private">Only me</option>
                     )}
-                    <option value="core">Core — admins and editors</option>
-                    <option value="public">Everyone with access</option>
+                    <option value="core">Core — admins only</option>
+                    <option value="public">Team — each sees their own pay</option>
                   </select>
                 </label>
               )}
@@ -560,12 +577,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
   );
 }
 
-function roleLabel(role: string | null) {
-  if (role === 'super_admin') return 'Runs it';
-  if (role === 'editor') return 'Can change';
-  if (role === 'viewer') return 'Can look';
-  return 'No access';
-}
+const roleLabel = roleName;
 
 function Figure({ label, value, sub, lead, negative }: {
   label: string; value: string; sub?: string; lead?: boolean; negative?: boolean;

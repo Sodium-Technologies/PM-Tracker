@@ -9,6 +9,8 @@ export interface Account {
   role: Role;
   created_at?: string;
   created_by?: string;
+  /** For a team member: the person on the payroll whose pay they see. */
+  staff_name?: string | null;
 }
 
 export interface Auth {
@@ -20,6 +22,8 @@ export interface Auth {
   email: string | null;
   /** null when signed in but not on the access list */
   role: Role | null;
+  /** for a team member, the person on the payroll they are */
+  staffName: string | null;
   canEdit: boolean;
   isSuperAdmin: boolean;
   signOut: () => Promise<void>;
@@ -31,6 +35,7 @@ export function useAuth(): Auth {
   const [error, setError] = React.useState<string | null>(null);
   const [session, setSession] = React.useState<Session | null>(null);
   const [role, setRole] = React.useState<Role | null>(null);
+  const [staffName, setStaffName] = React.useState<string | null>(null);
 
   const readRole = React.useCallback(async (email: string | undefined) => {
     if (!supabase || !email) { setRole(null); return; }
@@ -45,14 +50,21 @@ export function useAuth(): Auth {
       // Match exactly. `ilike` would treat `_` and `%` in an address as
       // wildcards, so nav_khan@… could match navXkhan@… — wrong row, wrong
       // role. Addresses are stored lowercase, so compare lowercase.
-      const { data, error: err } = await supabase
+      const address = email.trim().toLowerCase();
+      let { data, error: err } = await supabase
         .from('app_users')
-        .select('role')
-        .eq('email', email.trim().toLowerCase())
+        .select('role,staff_name')
+        .eq('email', address)
         .maybeSingle();
+      // A project that has not run team-access.sql has no staff_name to read.
+      if (err && /staff_name/i.test(err.message)) {
+        ({ data, error: err } = await supabase
+          .from('app_users').select('role').eq('email', address).maybeSingle() as never);
+      }
       if (err) { setError(err.message); return; }
       setError(null);
       setRole((data?.role as Role) ?? null);
+      setStaffName((data as { staff_name?: string | null } | null)?.staff_name ?? null);
     } catch (e) {
       setError((e as Error).message || 'The database did not answer.');
     }
@@ -95,6 +107,7 @@ export function useAuth(): Auth {
     session,
     email: session?.user.email ?? null,
     role,
+    staffName,
     canEdit: role === 'super_admin' || role === 'editor',
     isSuperAdmin: role === 'super_admin',
     signOut: async () => { await supabase?.auth.signOut(); },
@@ -167,11 +180,24 @@ export async function listAccounts(): Promise<Account[]> {
   return (data as Account[]) ?? [];
 }
 
-export async function grantAccess(email: string, role: Role, by: string | null) {
+/** Give an address access. A team member must be linked to a person, and only a
+ *  team member is: an admin sees everyone's pay anyway. */
+export async function grantAccess(email: string, role: Role, by: string | null, staffName?: string | null) {
   if (!supabase) return { error: 'not configured' };
+  const person = role === 'viewer' ? (staffName ?? '').trim() : '';
+  if (role === 'viewer' && !person) return { error: 'Pick which person on the payroll this team member is.' };
   const { error } = await supabase
     .from('app_users')
-    .upsert({ email: email.trim().toLowerCase(), role, created_by: by }, { onConflict: 'email' });
+    .upsert(
+      { email: email.trim().toLowerCase(), role, created_by: by, staff_name: person || null },
+      { onConflict: 'email' },
+    );
+  if (error && /staff_name/i.test(error.message)) {
+    return { error: 'This project has no team support yet. Run supabase/team-access.sql in Supabase, then try again.' };
+  }
+  if (error && /app_users_team_has_person/i.test(error.message)) {
+    return { error: 'Pick which person on the payroll this team member is.' };
+  }
   return { error: error?.message };
 }
 

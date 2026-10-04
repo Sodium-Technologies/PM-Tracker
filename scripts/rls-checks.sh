@@ -16,9 +16,10 @@ Q -c "grant execute on all functions in schema public to authenticated;" >/dev/n
 Q -c "insert into public.app_users(email, role) values
       ('owner@example.com','super_admin'),
       ('other.admin@example.com','super_admin'),
-      ('editor@example.com','editor'),
-      ('viewer@example.com','viewer')
-      on conflict (email) do update set role = excluded.role;" >/dev/null
+      ('editor@example.com','editor')
+      on conflict (email) do update set role = excluded.role;
+      insert into public.app_users(email, role, staff_name) values ('viewer@example.com','viewer','Ali')
+      on conflict (email) do update set role = excluded.role, staff_name = excluded.staff_name;" >/dev/null
 
 # Months written as the owner, so the trigger stamps them to that address.
 as() { Q -c "set local role authenticated; set local request.jwt.claims = '{\"email\":\"$1\"}'; $2"; }
@@ -50,7 +51,7 @@ echo "— who can see which month —"
 check owner@example.com        "core,private,public"
 check other.admin@example.com  "core,public"
 check editor@example.com       "core,public"
-check viewer@example.com       "public"
+check viewer@example.com       "-"
 check nobody@example.com       "-"
 
 echo
@@ -164,6 +165,37 @@ mutate owner@example.com "update public.periods set visibility = 'core', data = 
 if [ "$(truth "select visibility || ' ' || owner_email from public.periods where id = 'theirs';")" = "core owner@example.com" ]; then
   echo "PASS  and sharing it again leaves the owner as it was"
 else echo "FAIL  sharing a hidden month changed its owner"; fails=$((fails+1)); fi
+
+echo
+echo "— a team member sees their own pay, and nothing else —"
+Q -c "insert into public.periods(id,label,data,visibility) values
+      ('t-public','t-public','{\"visibility\":\"public\"}','public'),
+      ('t-core','t-core','{\"visibility\":\"core\"}','core')
+      on conflict (id) do nothing;" >/dev/null
+mutate owner@example.com "insert into public.team_pay(period_id,member,label,summary) values
+  ('t-public','ali','t-public','{}'), ('t-public','sara','t-public','{}'), ('t-core','ali','t-core','{}')"
+if [ "$(truth "select count(*) from public.team_pay;")" = "3" ]; then
+  echo "PASS  an administrator can publish each person's pay"
+else echo "FAIL  an administrator could not publish pay"; fails=$((fails+1)); fi
+pay() { psql -h /tmp -p "$PORT" -U postgres -X -q -t -A -c "
+  begin; set local role authenticated;
+  set local request.jwt.claims = '{\"email\":\"$1\"}';
+  select coalesce(string_agg(period_id || ':' || member, ',' order by period_id, member), '-') from public.team_pay; commit;" | grep -v '^$' | tail -1; }
+got=$(pay viewer@example.com)
+if [ "$got" = "t-public:ali" ]; then echo "PASS  the team member sees only their own, in a month shared with the team"
+else echo "FAIL  the team member sees [$got]"; fails=$((fails+1)); fi
+got=$(pay nobody@example.com)
+if [ "$got" = "-" ]; then echo "PASS  an address not on the list sees none of it"
+else echo "FAIL  an unlisted address sees [$got]"; fails=$((fails+1)); fi
+mutate viewer@example.com "insert into public.team_pay(period_id,member,label,summary) values ('t-public','ali2','x','{}')"
+mutate viewer@example.com "update public.team_pay set summary = '{\"payPkr\":1}' where member = 'ali'"
+if [ "$(truth "select count(*) from public.team_pay where member = 'ali2' or summary ? 'payPkr';")" = "0" ]; then
+  echo "PASS  and cannot write any of it"
+else echo "FAIL  a team member wrote to team_pay"; fails=$((fails+1)); fi
+mutate owner@example.com "insert into public.app_users(email, role) values ('loose@example.com','viewer')"
+if [ "$(truth "select count(*) from public.app_users where email = 'loose@example.com';")" = "0" ]; then
+  echo "PASS  a team member cannot be added without a person"
+else echo "FAIL  a team member was added with no person"; fails=$((fails+1)); fi
 
 echo
 [ "$fails" = "0" ] && echo "A private month is private." || { echo "$fails check(s) failed"; exit 1; }
