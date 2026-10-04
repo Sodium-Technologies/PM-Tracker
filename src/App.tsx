@@ -14,6 +14,7 @@ import Analytics from './components/Analytics';
 import DivisionMatrix from './components/DivisionMatrix';
 import Ledger from './components/Ledger';
 import Mark from './components/Mark';
+import { useNewerVersion } from './lib/freshness';
 import Overview from './components/Overview';
 import People from './components/People';
 import SignIn from './components/SignIn';
@@ -59,6 +60,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
     setView('month');
   };
   const [toast, setToast] = React.useState('');
+  const newerVersion = useNewerVersion();
 
   /** One step back, and then another. Every change that touches the books
    *  records the state it replaced, so it can be put back exactly.
@@ -362,13 +364,24 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
               {syncing && <span className="syncing"> · loading…</span>}
             </div>
             <button className="link" onClick={auth.signOut}>Sign out</button>
+            <div className="build" title="Which version of the app this is">version {__BUILD__}</div>
           </div>
         ) : (
-          <div className="rail-foot">Saved in this browser only. Download a backup before switching devices.</div>
+          <div className="rail-foot">
+            Saved in this browser only. Download a backup before switching devices.
+            <div className="build" title="Which version of the app this is">version {__BUILD__}</div>
+          </div>
         )}
       </aside>
 
       <main className="main">
+        {newerVersion && (
+          <div className="update-banner" role="status">
+            <span><b>A newer version of the app is ready.</b> This page is running an older one.</span>
+            <button className="btn primary" onClick={() => window.location.reload()}>Reload</button>
+          </div>
+        )}
+
         {!cloudEnabled && (
           <div className="mode-banner">
             <b>Local mode — no sign-in, nothing shared.</b> Everything here lives in this

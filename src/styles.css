@@ -945,3 +945,16 @@ select.seen-public { border-color: var(--accent); color: var(--accent); }
   padding: 4px 0;
 }
 .code-fallback summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.build { margin-top: 8px; font: 10.5px 'IBM Plex Mono', monospace; color: var(--ink-faint); }
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 24px;
+  background: var(--accent-wash);
+  border-bottom: 1px solid var(--accent);
+  font-size: 13px;
+}

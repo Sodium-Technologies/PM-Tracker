@@ -382,7 +382,15 @@ browser and never reaches the web.
 npm run build && node scripts/e2e-week.mjs   # a week stays in its own month
 npx tsx scripts/week-checks.mts              # reading a pasted week
 ./scripts/rls-checks.sh                      # a private month is private
+npm run build && node scripts/e2e-fresh.mjs  # an open page notices a newer version
 ```
+
+The version a page is running is shown at the bottom of the rail — the commit it
+was built from and the date. A page that has been open across a deploy, or a
+phone's home-screen app the system suspended rather than closed, checks the
+published page whenever it comes back to the front and offers to reload when a
+newer version is out. Netlify posts no build status to GitHub, so that footer is
+the quickest way to tell which version is actually on a screen.
 
 `rls-checks.sh` runs `supabase/schema.sql` unchanged against a throwaway
 Postgres, with `auth.jwt()` faked from a setting exactly as Supabase builds it,
