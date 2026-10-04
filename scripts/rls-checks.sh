@@ -131,4 +131,39 @@ if [ "$(truth "select label from public.periods where id = 'public';")" = "edite
 else echo "FAIL  an editor could not edit a month"; fails=$((fails+1)); fi
 
 echo
+echo "— hiding a month somebody else is recorded as owning —"
+# The case that reached an administrator in the field: a month they can see
+# because it is shared with the core team, whose recorded owner is another
+# address. Hiding it must make the administrator its owner, or the database
+# refuses the very person asking.
+Q -c "insert into public.periods(id,label,data,visibility,owner_email)
+      values ('theirs','theirs','{\"visibility\":\"core\"}'::jsonb,'core','editor@example.com')
+      on conflict (id) do update set visibility='core', data='{\"visibility\":\"core\"}', owner_email='editor@example.com';" >/dev/null
+mutate owner@example.com "insert into public.periods(id,label,data,visibility) values ('theirs','theirs','{\"visibility\":\"private\"}'::jsonb,'private') on conflict (id) do update set data=excluded.data, visibility=excluded.visibility"
+if [ "$(truth "select visibility || ' ' || owner_email from public.periods where id = 'theirs';")" = "private owner@example.com" ]; then
+  echo "PASS  an administrator can hide it, and becomes its owner"
+else echo "FAIL  hiding it was refused, or left the old owner: $(truth "select visibility || ' ' || coalesce(owner_email,'-') from public.periods where id = 'theirs';")"; fails=$((fails+1)); fi
+seen=$(psql -h /tmp -p "$PORT" -U postgres -X -q -t -A -c "
+  begin; set local role authenticated;
+  set local request.jwt.claims = '{\"email\":\"editor@example.com\"}';
+  select count(*) from public.periods where id = 'theirs'; commit;" | grep -E '^[0-9]+$')
+if [ "$seen" = "0" ]; then echo "PASS  and the address it used to name can no longer see it"
+else echo "FAIL  the previous owner can still see a month that was hidden"; fails=$((fails+1)); fi
+
+# and it cannot be used to take a month away from somebody who hid it first
+Q -c "insert into public.periods(id,label,data,visibility,owner_email)
+      values ('hidden2','hidden2','{\"visibility\":\"private\"}'::jsonb,'private','other.admin@example.com')
+      on conflict (id) do update set visibility='private', data='{\"visibility\":\"private\"}', owner_email='other.admin@example.com';" >/dev/null
+mutate owner@example.com "update public.periods set label = 'taken' where id = 'hidden2'"
+if [ "$(truth "select owner_email || ' ' || label from public.periods where id = 'hidden2';")" = "other.admin@example.com hidden2" ]; then
+  echo "PASS  but not one another administrator has already hidden"
+else echo "FAIL  an administrator took a month another had hidden"; fails=$((fails+1)); fi
+
+# making a hidden month shared again does not move it
+mutate owner@example.com "update public.periods set visibility = 'core', data = '{\"visibility\":\"core\"}' where id = 'theirs'"
+if [ "$(truth "select visibility || ' ' || owner_email from public.periods where id = 'theirs';")" = "core owner@example.com" ]; then
+  echo "PASS  and sharing it again leaves the owner as it was"
+else echo "FAIL  sharing a hidden month changed its owner"; fails=$((fails+1)); fi
+
+echo
 [ "$fails" = "0" ] && echo "A private month is private." || { echo "$fails check(s) failed"; exit 1; }

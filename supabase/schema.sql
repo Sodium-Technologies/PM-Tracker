@@ -239,6 +239,14 @@ begin
   -- everyone the moment it was marked private.
   if tg_op = 'INSERT' then
     new.owner_email := coalesce(auth.jwt() ->> 'email', new.owner_email);
+  elsif public.effective_visibility(new.visibility, new.data) = 'private'
+    and public.effective_visibility(old.visibility, old.data) <> 'private'
+    and auth.jwt() ->> 'email' is not null then
+    -- A month moved into "only me" belongs to whoever moved it there: that is
+    -- what "me" means. Only an administrator may make that move — the policy
+    -- refuses it from anyone else — and only on a month they can already see,
+    -- so it can never take a month away from somebody who had hidden it.
+    new.owner_email := auth.jwt() ->> 'email';
   else
     new.owner_email := coalesce(old.owner_email, auth.jwt() ->> 'email', new.owner_email);
   end if;

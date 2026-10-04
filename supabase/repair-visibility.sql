@@ -67,6 +67,44 @@ create policy periods_delete on public.periods
     and public.can_see_period(visibility, owner_email, data)
   );
 
+-- Who owns a month. Hiding one now makes the person hiding it its owner, which
+-- is what "only me" has to mean — otherwise an administrator could see a month,
+-- hide it, and be refused because the row named somebody else.
+create or replace function public.touch_updated_at()
+returns trigger
+language plpgsql
+as $fn_touch$
+begin
+  new.updated_at := now();
+  new.updated_by := coalesce(auth.jwt() ->> 'email', new.updated_by);
+  -- The owner is stamped from the signed-in address, never taken from the
+  -- request, so nobody can claim a private month by writing someone else's
+  -- address into it — or their own. An owner that is already set never changes
+  -- hands; one that is missing can still be filled, or a month left ownerless by
+  -- an older version could never be claimed by anybody and would be lost to
+  -- everyone the moment it was marked private.
+  if tg_op = 'INSERT' then
+    new.owner_email := coalesce(auth.jwt() ->> 'email', new.owner_email);
+  elsif public.effective_visibility(new.visibility, new.data) = 'private'
+    and public.effective_visibility(old.visibility, old.data) <> 'private'
+    and auth.jwt() ->> 'email' is not null then
+    -- A month moved into "only me" belongs to whoever moved it there: that is
+    -- what "me" means. Only an administrator may make that move — the policy
+    -- refuses it from anyone else — and only on a month they can already see,
+    -- so it can never take a month away from somebody who had hidden it.
+    new.owner_email := auth.jwt() ->> 'email';
+  else
+    new.owner_email := coalesce(old.owner_email, auth.jwt() ->> 'email', new.owner_email);
+  end if;
+  return new;
+end
+$fn_touch$;
+
+drop trigger if exists periods_touch on public.periods;
+create trigger periods_touch
+  before insert or update on public.periods
+  for each row execute function public.touch_updated_at();
+
 -- A private month with no owner is private to nobody: it cannot be read, and it
 -- cannot be written either, because the policy that governs an update has to be
 -- able to see the row first. Anything left without an owner goes to the first

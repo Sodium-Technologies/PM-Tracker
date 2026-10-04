@@ -123,8 +123,13 @@ claimed by writing someone else's address into it.
 
 Two consequences worth knowing:
 
-- Whoever creates a month owns it. If somebody else needs to be able to hide
-  work, it has to be a month they made.
+- Whoever creates a month owns it — until an administrator sets it to **Only
+  me**, which makes that administrator its owner. That is what "me" has to
+  mean: otherwise an administrator could see a month, hide it, and be refused
+  because the row still named somebody else. It cannot be used to take a month
+  another administrator has already hidden, because a hidden month cannot be
+  seen, and what cannot be seen cannot be changed. Sharing a hidden month again
+  leaves its owner as it was.
 - A month nobody may see is a month nobody may change: an editor cannot write
   over a private month it cannot read, nor delete it.
 
