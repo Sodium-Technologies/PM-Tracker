@@ -113,6 +113,23 @@ export function EntriesInput({ id, entries, onChange }: {
   );
 }
 
+/** A calendar day, `YYYY-MM-DD`, or '' when cleared. */
+export function DateInput({ value, onChange, label }: {
+  value: string; onChange: (v: string) => void; label: string;
+}) {
+  const canEdit = useCanEdit();
+  return (
+    <input
+      type="date"
+      className="cell-input date"
+      aria-label={label}
+      readOnly={!canEdit}
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
 /** Wraps an action only an editor should see — add, remove, split evenly. */
 export function EditOnly({ children }: { children: React.ReactNode }) {
   return useCanEdit() ? <>{children}</> : null;

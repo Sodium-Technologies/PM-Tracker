@@ -76,10 +76,14 @@ if (fs.existsSync(CSV)) {
   is('four clients', clients, ['BSF', 'Post Road Management LLC', 'Texas Corporate Homes', 'Three Bulls Group']);
 
   const all = totalsByClient(rep.entries).sort((a, b) => a.name.localeCompare(b.name));
-  is('BSF totals', all[0], { name: 'BSF', hours: 40, earningsUsd: 400, feeUsd: 60 });
-  is('Post Road totals', all[1], { name: 'Post Road Management LLC', hours: 152, earningsUsd: 1368, feeUsd: 136.8 });
-  is('Texas totals', all[2], { name: 'Texas Corporate Homes', hours: 82, earningsUsd: 492, feeUsd: 49.2 });
-  is('Three Bulls totals', all[3], { name: 'Three Bulls Group', hours: 83, earningsUsd: 830, feeUsd: 124.5 });
+  is('BSF totals', all[0], { name: 'BSF', hours: 40, earningsUsd: 400, feeUsd: 60,
+    cycle: { start: '2026-08-24', end: '2026-09-20' } });
+  is('Post Road totals', all[1], { name: 'Post Road Management LLC', hours: 152, earningsUsd: 1368, feeUsd: 136.8,
+    cycle: { start: '2026-08-24', end: '2026-09-20' } });
+  is('Texas totals', all[2], { name: 'Texas Corporate Homes', hours: 82, earningsUsd: 492, feeUsd: 49.2,
+    cycle: { start: '2026-08-31', end: '2026-09-20' } });
+  is('Three Bulls totals', all[3], { name: 'Three Bulls Group', hours: 83, earningsUsd: 830, feeUsd: 124.5,
+    cycle: { start: '2026-08-31', end: '2026-09-20' } });
 
   const weeks = [...new Set(rep.entries.map((e) => e.week))];
   is('four work weeks, oldest first', weeks,

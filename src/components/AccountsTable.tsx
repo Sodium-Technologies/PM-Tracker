@@ -2,8 +2,9 @@ import React from 'react';
 import type { Account, Period } from '../lib/types';
 import { fmtPkr, fmtUsd, round2, type PeriodResult } from '../lib/calc';
 import { hoursAsText } from '../lib/time';
-import { EditOnly, EntriesInput, NumberInput, OptionalNumberInput, TextInput } from './Fields';
+import { DateInput, EditOnly, EntriesInput, NumberInput, OptionalNumberInput, TextInput } from './Fields';
 import { newAccount } from '../lib/state';
+import { cycleDays, fmtCycle, monthCycle } from '../lib/cycle';
 import { useCanEdit } from '../lib/access';
 import WeekImport from './WeekImport';
 
@@ -23,6 +24,10 @@ export default function AccountsTable({ period, periods, result, update, timeFor
     });
 
   const t = result.totals;
+  // A client added to "October 2026" bills for October until somebody says
+  // otherwise; one added to a month with no month in its name starts blank.
+  const month = monthCycle(period.label);
+  const unset = period.accounts.filter((a) => !a.cycleStart && !a.cycleEnd).length;
 
   if (week) {
     return (
@@ -44,7 +49,17 @@ export default function AccountsTable({ period, periods, result, update, timeFor
         <div className="head-actions">
           <EditOnly>
             <button className="btn" onClick={() => setWeek(true)}>Add a week</button>
-            <button className="btn" onClick={() => update((d) => d.accounts.push(newAccount()))}>
+            {month && unset > 0 && (
+              <button className="btn" title={`Set the billing cycle of every client that has none to ${fmtCycle(month.start, month.end)}`}
+                onClick={() => update((d) => d.accounts.forEach((a) => {
+                  if (!a.cycleStart && !a.cycleEnd) { a.cycleStart = month.start; a.cycleEnd = month.end; }
+                }))}>
+                Fill {unset} empty cycle{unset === 1 ? '' : 's'}
+              </button>
+            )}
+            <button className="btn" onClick={() => update((d) => d.accounts.push(newAccount(
+              month ? { cycleStart: month.start, cycleEnd: month.end } : {},
+            )))}>
               Add a client
             </button>
           </EditOnly>
@@ -55,6 +70,7 @@ export default function AccountsTable({ period, periods, result, update, timeFor
           <thead>
             <tr>
               <th>Client</th>
+              <th title="The days this month's figures cover, on the client's own billing calendar">Billing cycle</th>
               <th className="fig">Rate</th>
               <th>Time worked</th>
               <th className="fig">Total time</th>
@@ -79,6 +95,10 @@ export default function AccountsTable({ period, periods, result, update, timeFor
                   <td className="name">
                     <TextInput value={a.name} onChange={(v) => patch(a.id, { name: v })} />
                     {a.notes && <span className="sub">{a.notes}</span>}
+                  </td>
+                  <td className="cycle">
+                    <CycleCell start={a.cycleStart} end={a.cycleEnd} name={a.name}
+                      onChange={(start, end) => patch(a.id, { cycleStart: start, cycleEnd: end })} />
                   </td>
                   <td className="fig">
                     <span className="unit">
@@ -141,12 +161,12 @@ export default function AccountsTable({ period, periods, result, update, timeFor
               );
             })}
             {!result.accounts.length && (
-              <tr><td colSpan={14} className="empty">No clients yet — add one, or load a sheet.</td></tr>
+              <tr><td colSpan={16} className="empty">No clients yet — add one, or load a sheet.</td></tr>
             )}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={4}>{result.accounts.length} clients</td>
+              <td colSpan={5}>{result.accounts.length} clients</td>
               <td className="fig mono">{fmtUsd(t.grossUsd)}</td>
               <td className="fig mono">{fmtUsd(t.feeUsd)}</td>
               <td />
@@ -164,5 +184,37 @@ export default function AccountsTable({ period, periods, result, update, timeFor
         </table>
       </div>
     </section>
+  );
+}
+
+/** The start and end of one client's billing cycle, with how long it runs — or
+ *  what is wrong with it. Read-only visitors get the dates written out. */
+function CycleCell({ start, end, name, onChange }: {
+  start: string; end: string; name: string;
+  onChange: (start: string, end: string) => void;
+}) {
+  const canEdit = useCanEdit();
+  const days = cycleDays(start, end);
+  const backwards = days !== null && days < 1;
+  const note = backwards ? 'ends before it starts'
+    : days !== null ? `${days} day${days === 1 ? '' : 's'}`
+    : start || end ? 'needs both dates' : '';
+  if (!canEdit) {
+    return (
+      <>
+        <span className="cycle-text">{fmtCycle(start, end) || '—'}</span>
+        {note && <span className={`sub${backwards ? ' alloc-off' : ''}`}>{note}</span>}
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="cycle-dates">
+        <DateInput value={start} label={`${name} billing cycle starts`} onChange={(v) => onChange(v, end)} />
+        <span className="cycle-to">to</span>
+        <DateInput value={end} label={`${name} billing cycle ends`} onChange={(v) => onChange(start, v)} />
+      </span>
+      {note && <span className={`sub${backwards ? ' alloc-off' : ''}`}>{note}</span>}
+    </>
   );
 }

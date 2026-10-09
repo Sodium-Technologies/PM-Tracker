@@ -10,7 +10,11 @@ export interface TeamSummary {
   label: string;
   name: string;
   usdToPkr: number;
-  projects: { name: string; hours: number; sharePct: number; earnedPkr: number; earnedUsd: number }[];
+  projects: {
+    name: string; hours: number; sharePct: number; earnedPkr: number; earnedUsd: number;
+    /** the project's billing cycle, `YYYY-MM-DD`, '' when not set */
+    cycleStart?: string; cycleEnd?: string;
+  }[];
   /** from the projects, before any adjustment */
   sharePkr: number;
   adjustmentPkr: number;
@@ -46,6 +50,8 @@ export function summariesFor(period: Period): { member: string; summary: TeamSum
               sharePct: (Number(s.staff.shares[a.account.id]) || 0) * 100,
               earnedPkr,
               earnedUsd: rate ? earnedPkr / rate : 0,
+              cycleStart: a.account.cycleStart ?? '',
+              cycleEnd: a.account.cycleEnd ?? '',
             };
           }),
         sharePkr: s.sharePkr,

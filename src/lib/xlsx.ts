@@ -318,7 +318,8 @@ export function exportWorkbook(periods: Period[], filename: string) {
     const rows: (string | number)[][] = [
       ['Account', 'Owner', 'Currency', 'Rate', 'Units', 'Gross', 'Fee %', 'Fee', 'Adjustment',
         'Earned USD', 'Earned PKR', 'Received USD', 'Received PKR', 'Outstanding USD', 'Received set by',
-        'Freelancer %', 'Freelancer USD', 'Freelancer PKR', 'Company USD', 'Company PKR', 'Status', 'Notes'],
+        'Freelancer %', 'Freelancer USD', 'Freelancer PKR', 'Company USD', 'Company PKR', 'Status', 'Notes',
+        'Cycle start', 'Cycle end'],
     ];
     for (const a of res.accounts) {
       rows.push([
@@ -326,13 +327,13 @@ export function exportWorkbook(periods: Period[], filename: string) {
         a.account.feePct, a.feeUsd, a.account.adjustmentUsd, a.earnedUsd, a.earnedPkr,
         a.receivedUsd, a.receivedPkr, a.outstandingUsd, a.receivedIsManual ? 'entered' : 'status',
         a.account.freelancerPct, a.freelancerUsd, a.freelancerPkr, a.companyUsd, a.companyPkr,
-        a.account.status, a.account.notes,
+        a.account.status, a.account.notes, a.account.cycleStart ?? '', a.account.cycleEnd ?? '',
       ]);
     }
     rows.push(['TOTAL', '', '', '', '', res.totals.grossUsd, '', res.totals.feeUsd, '',
       res.totals.earnedUsd, res.totals.earnedPkr,
       res.totals.receivedUsd, res.totals.receivedPkr, res.totals.outstandingUsd, '',
-      '', res.totals.freelancerUsd, res.totals.freelancerPkr, res.totals.companyUsd, res.totals.companyPkr, '', '']);
+      '', res.totals.freelancerUsd, res.totals.freelancerPkr, res.totals.companyUsd, res.totals.companyPkr, '', '', '', '']);
 
     rows.push([], ['Division (share of each account\'s freelancer pool)']);
     rows.push(['Name', 'Pay PKR', 'Pay USD', ...res.accounts.map((a) => a.account.name)]);

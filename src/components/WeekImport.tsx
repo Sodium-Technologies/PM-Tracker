@@ -8,6 +8,7 @@ import {
   type UpworkEntry, type WeekRow,
 } from '../lib/week';
 import { newAccount } from '../lib/state';
+import { fmtCycle, widen } from '../lib/cycle';
 
 type Update = (fn: (p: Period) => void) => void;
 type Action = 'append' | 'replace' | 'new' | 'skip' | 'ignore';
@@ -123,6 +124,8 @@ export default function WeekImport({ period, periods, result, update, onClose }:
             rate: rateFromMoney !== null ? round2(rateFromMoney) : 0,
             feePct: feeFromMoney !== null ? round2(feeFromMoney) : 0,
             entries: [row.hours],
+            cycleStart: row.cycle?.start ?? '',
+            cycleEnd: row.cycle?.end ?? '',
           }));
           continue;
         }
@@ -134,12 +137,21 @@ export default function WeekImport({ period, periods, result, update, onClose }:
         }
         if (rateFromMoney !== null) existing.rate = round2(rateFromMoney);
         if (feeFromMoney !== null) existing.feePct = round2(feeFromMoney);
-        if (line.action === 'replace') existing.entries = [row.hours];
-        else {
+        if (line.action === 'replace') {
+          existing.entries = [row.hours];
+          // The weeks replace what was there, so they are the whole cycle now.
+          if (row.cycle) { existing.cycleStart = row.cycle.start; existing.cycleEnd = row.cycle.end; }
+        } else {
           // An untouched client carries a single zero as scaffolding, not as a
           // week that was worked; the first real week takes its place.
           const kept = existing.entries.filter((e) => Number(e) !== 0);
           existing.entries = [...kept, row.hours];
+          // Added weeks stretch the cycle to cover them, never shrink it.
+          if (row.cycle) {
+            const c = widen(existing.cycleStart ?? '', existing.cycleEnd ?? '', row.cycle);
+            existing.cycleStart = c.start;
+            existing.cycleEnd = c.end;
+          }
         }
       }
     });
@@ -287,6 +299,9 @@ export default function WeekImport({ period, periods, result, update, onClose }:
                         {line.matched === 'close' && <span className="tag-inline">close match</span>}
                         {line.matched === 'remembered' && <span className="tag-inline">remembered</span>}
                         {line.action === 'ignore' && <span className="tag-inline">not our business</span>}
+                        {line.row.cycle && (
+                          <span className="sub">work from {fmtCycle(line.row.cycle.start, line.row.cycle.end)}</span>
+                        )}
                         {d.disagrees && (
                           <span className="sub warn-text">
                             the money says {hoursAsText(d.hoursFromMoney ?? 0)}, the timesheet says {hoursAsText(line.row.hours)}

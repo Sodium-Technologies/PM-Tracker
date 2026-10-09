@@ -59,8 +59,9 @@ All of this is enforced by Postgres row-level security, not by the page:
 - `label`, `usdToPkr`, `timeFormat` (`hm`: 12.20 = 12h20m, or `decimal`).
 - `accounts[]` (clients/projects): name, owner, currency, rate, `entries[]`
   (weekly hours), `feePct`, `adjustmentUsd`, `freelancerPct`, status,
-  `receivedAmount` (null means follow the status), `aliases[]`, `paidDirect`
-  and notes.
+  `receivedAmount` (null means follow the status), `aliases[]`, `paidDirect`,
+  `cycleStart`/`cycleEnd` (the billing cycle, `YYYY-MM-DD`; '' means not
+  set) and notes.
 - `staff[]`: name, `shares{accountId: 0..1}`, `adjustmentPkr`, `retained`
   (paid here), `advancePkr` (already taken) and notes.
 - `reimbursements[]`, `otherPayables[]`, `withheld[]`, `localWages[]`,
@@ -83,7 +84,10 @@ All of this is enforced by Postgres row-level security, not by the page:
   3-month average, revenue by client, each client over time.
 - **Month**, with four tabs:
   - Summary
-  - Revenue (client column pinned when scrolling sideways)
+  - Revenue (client column pinned when scrolling sideways; a Billing cycle
+    column with start and end dates. New clients default to the calendar
+    month, "Start a new month" moves each cycle on by a month, and the Upwork
+    import stretches a cycle to cover the weeks it adds)
   - Payrolls (team members, with pay in USD)
   - Distributions (transfers and the left-to-send ledger)
 - **Month header**: the month's name, USD→PKR rate, time format, Seen by,

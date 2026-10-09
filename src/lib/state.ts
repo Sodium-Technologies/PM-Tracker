@@ -1,4 +1,5 @@
 import type { Account, AppState, Period, StaffMember } from './types';
+import { nextCycle } from './cycle';
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -19,6 +20,8 @@ export function newAccount(partial: Partial<Account> = {}): Account {
     status: 'Pending',
     receivedAmount: null,
     aliases: [],
+    cycleStart: '',
+    cycleEnd: '',
     notes: '',
     ...partial,
   };
@@ -57,7 +60,12 @@ export function rollForward(period: Period, label?: string): Period {
     const id = uid();
     idMap[a.id] = id;
     // Last month's money is last month's; a fresh month has realised nothing.
-    return { ...a, id, entries: [0], adjustmentUsd: 0, status: 'Pending', receivedAmount: null, notes: '' };
+    // The billing cycle moves on by a month, on the client's own calendar.
+    const cycle = nextCycle(a.cycleStart ?? '', a.cycleEnd ?? '');
+    return {
+      ...a, id, entries: [0], adjustmentUsd: 0, status: 'Pending', receivedAmount: null, notes: '',
+      cycleStart: cycle.start, cycleEnd: cycle.end,
+    };
   });
   const staff = period.staff.map((s) => {
     const shares: Record<string, number> = {};
@@ -121,6 +129,8 @@ export function normalize(state: AppState): AppState {
       a.receivedAmount ??= null;
       a.aliases ??= [];
       a.freelancerPct ??= 70;
+      a.cycleStart ??= '';
+      a.cycleEnd ??= '';
     }
     for (const m of p.staff) {
       m.shares ??= {};

@@ -239,7 +239,7 @@ const samplePeriod = {
   });
   await page.getByRole('button', { name: 'Revenue' }).click();
   await page.waitForTimeout(300);
-  const rate = page.locator('table tbody tr').first().locator('input').nth(1);
+  const rate = page.locator('table tbody tr').first().locator('input').nth(3);
   await rate.fill('99');
   await page.waitForTimeout(1500);
   // The retry drops the column but keeps the setting inside `data`, so the test
@@ -273,7 +273,7 @@ const samplePeriod = {
   const before = tokens.length;
   await page.getByRole('button', { name: 'Revenue' }).click();
   await page.waitForTimeout(300);
-  await page.locator('table tbody tr').first().locator('input').nth(1).fill('77');
+  await page.locator('table tbody tr').first().locator('input').nth(3).fill('77');
   await page.waitForTimeout(1800);
   ok('a policy refusal refreshes the session and tries again', tokens.length > before,
      `${tokens.length - before} refresh(es)`);
@@ -286,7 +286,7 @@ const samplePeriod = {
   });
   await page.getByRole('button', { name: 'Revenue' }).click();
   await page.waitForTimeout(300);
-  await page.locator('table tbody tr').first().locator('input').nth(1).fill('78');
+  await page.locator('table tbody tr').first().locator('input').nth(3).fill('78');
   await page.waitForTimeout(1800);
   const said = await page.locator('.toast').innerText().catch(() => '');
   ok('a refusal a refresh cannot cure names who the database took you for',
@@ -310,7 +310,8 @@ const samplePeriod = {
   const periodReads = [];
   const summary = {
     label: 'September 2026', name: 'Naveed', usdToPkr: 280,
-    projects: [{ name: 'Luxe', hours: 80, sharePct: 100, earnedPkr: 112000, earnedUsd: 400 }],
+    projects: [{ name: 'Luxe', hours: 80, sharePct: 100, earnedPkr: 112000, earnedUsd: 400,
+      cycleStart: '2026-09-01', cycleEnd: '2026-09-30' }],
     sharePkr: 112000, adjustmentPkr: 0, payPkr: 112000, payUsd: 400, takenPkr: 12000, stillOwedPkr: 100000,
   };
   const { page, ctx, errors } = await open({
@@ -323,6 +324,7 @@ const samplePeriod = {
   ok('a team member sees their own pay', /112,000/.test(await page.locator('.team-sheet').innerText()));
   ok('and the projects it came from', /Luxe/.test(await page.locator('.team-sheet').innerText()));
   ok('and what is still owed', /100,000/.test(await page.locator('.team-sheet').innerText()));
+  ok("and each project's billing cycle", /Sep 1 – Sep 30, 2026/.test(await page.locator('.team-sheet').innerText()));
   ok('a team member gets no month list, settings or tabs',
      (await page.locator('.period-list, .rail-nav, .tabs, #grant-email').count()) === 0);
   ok('a team member gets no way to change anything',
@@ -356,8 +358,31 @@ const samplePeriod = {
   await page.waitForTimeout(300);
   await page.getByRole('button', { name: 'Revenue' }).click();
   await page.waitForTimeout(300);
-  const rate = page.locator('table tbody tr').first().locator('input').nth(2);
+  const rate = page.locator('table tbody tr').first().locator('input').nth(4);
   ok('figure inputs are editable for an editor', await rate.getAttribute('readonly') === null);
+
+  // Billing cycle
+  ok('the revenue table has a billing cycle column',
+     (await page.locator('thead th').allInnerTexts()).slice(0, 2).join('|').toLowerCase() === 'client|billing cycle',
+     (await page.locator('thead th').allInnerTexts()).slice(0, 2).join('|'));
+  const fill = page.getByRole('button', { name: /Fill 1 empty cycle/ });
+  ok('a client with no cycle can be filled from the month', await fill.isVisible());
+  await fill.click();
+  await page.waitForTimeout(300);
+  const start = page.getByLabel('Luxe billing cycle starts');
+  const end = page.getByLabel('Luxe billing cycle ends');
+  ok('filling uses the whole month', (await start.inputValue()) === '2026-09-01' && (await end.inputValue()) === '2026-09-30',
+     `${await start.inputValue()} to ${await end.inputValue()}`);
+  ok('the cycle says how long it runs', /30 days/.test(await page.locator('td.cycle').first().innerText()));
+  ok('nothing is left to fill', (await page.getByRole('button', { name: /empty cycle/ }).count()) === 0);
+  await start.fill('2026-09-15');
+  await end.fill('2026-10-14');
+  await page.waitForTimeout(200);
+  ok('a cycle can run across two months', /30 days/.test(await page.locator('td.cycle').first().innerText()));
+  await end.fill('2026-09-10');
+  await page.waitForTimeout(200);
+  ok('a cycle that ends before it starts is flagged',
+     /ends before it starts/.test(await page.locator('td.cycle').first().innerText()));
   await ctx.close();
 }
 

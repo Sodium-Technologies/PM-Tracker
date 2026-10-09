@@ -2,6 +2,7 @@ import React from 'react';
 import { fmtPkr, fmtUsd, round2 } from '../lib/calc';
 import { hoursAsText } from '../lib/time';
 import { fetchTeamPay, type TeamSummary } from '../lib/team';
+import { fmtCycle } from '../lib/cycle';
 import Mark from './Mark';
 
 /** All a team member ever sees: their own pay, month by month, and the projects
@@ -96,18 +97,19 @@ export default function TeamView({ email, staffName, onSignOut }: {
                 <>
                   <div className="scroll">
                     <table>
-                      <thead><tr><th>Project</th><th className="fig">Hours</th><th className="fig">Your share</th><th className="fig">PKR</th><th className="fig">USD</th></tr></thead>
+                      <thead><tr><th>Project</th><th>Billing cycle</th><th className="fig">Hours</th><th className="fig">Your share</th><th className="fig">PKR</th><th className="fig">USD</th></tr></thead>
                       <tbody>
                         {month.projects.map((p) => (
                           <tr key={p.name}>
                             <td>{p.name}</td>
+                            <td className="mono">{fmtCycle(p.cycleStart ?? '', p.cycleEnd ?? '') || '—'}</td>
                             <td className="fig mono">{hoursAsText(p.hours)}</td>
                             <td className="fig mono">{round2(p.sharePct)}%</td>
                             <td className="fig mono">{fmtPkr(p.earnedPkr)}</td>
                             <td className="fig mono">{fmtUsd(p.earnedUsd)}</td>
                           </tr>
                         ))}
-                        {!month.projects.length && <tr><td colSpan={5} className="empty">No projects this month.</td></tr>}
+                        {!month.projects.length && <tr><td colSpan={6} className="empty">No projects this month.</td></tr>}
                       </tbody>
                     </table>
                   </div>

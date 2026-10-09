@@ -43,6 +43,12 @@ export interface Account {
   /** The client pays the company's account directly, so this money never passes
    *  through the person keeping the books and is not theirs to send on. */
   paidDirect: boolean;
+  /** The billing cycle this month's figures cover, as `YYYY-MM-DD`; '' when not
+   *  set. Clients bill on their own calendars — the 1st to the 30th, the 15th to
+   *  the 14th, Upwork's Monday-to-Sunday weeks — so the payroll month alone does
+   *  not say which days of work a figure is for. */
+  cycleStart: string;
+  cycleEnd: string;
   notes: string;
 }
 

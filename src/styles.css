@@ -969,3 +969,10 @@ select.seen-public { border-color: var(--accent); color: var(--accent); }
 .team-head .spacer { flex: 1; }
 .team-sheet { max-width: 960px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
 .team-sheet .figures { margin: 0; }
+
+/* ---------- billing cycle ---------- */
+td.cycle { white-space: nowrap; }
+.cycle-dates { display: inline-flex; align-items: center; gap: 4px; }
+.cycle-to { font-size: 12px; color: var(--ink-soft); }
+.cell-input.date { width: 128px; min-width: 128px; font-variant-numeric: tabular-nums; }
+.cycle-text { font-variant-numeric: tabular-nums; }

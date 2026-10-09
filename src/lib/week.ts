@@ -1,4 +1,5 @@
 import type { Account } from './types';
+import { parseWeekRange, widen } from './cycle';
 
 /** One line of an Upwork week: what the timesheet says was worked, and what the
  *  transactions say was earned and charged for it. */
@@ -7,6 +8,9 @@ export interface WeekRow {
   hours: number;
   earningsUsd: number;
   feeUsd: number;
+  /** the days the work covers, when the report says — first day to last, as
+   *  `YYYY-MM-DD`. A week typed in by hand carries none. */
+  cycle?: { start: string; end: string };
 }
 
 const NUM = /-?[\d,]*\.?\d+/;
@@ -283,10 +287,13 @@ export function parseUpworkCsv(text: string): UpworkReport {
 export function totalsByClient(entries: UpworkEntry[]): WeekRow[] {
   const by = new Map<string, WeekRow>();
   for (const e of entries) {
-    const at = by.get(e.client) ?? { name: e.client, hours: 0, earningsUsd: 0, feeUsd: 0 };
+    const at: WeekRow = by.get(e.client) ?? { name: e.client, hours: 0, earningsUsd: 0, feeUsd: 0 };
     at.hours += e.hours;
     at.earningsUsd += e.earningsUsd;
     at.feeUsd += e.feeUsd;
+    // The weeks chosen for a client, first day to last.
+    const range = parseWeekRange(e.week);
+    if (range) at.cycle = at.cycle ? widen(at.cycle.start, at.cycle.end, range) : range;
     by.set(e.client, at);
   }
   // Rounded once, at the end: a week of 30.67 hours is Upwork's own rounding,
