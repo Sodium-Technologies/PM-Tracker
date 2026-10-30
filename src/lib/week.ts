@@ -288,7 +288,10 @@ export function totalsByClient(entries: UpworkEntry[]): WeekRow[] {
   const by = new Map<string, WeekRow>();
   for (const e of entries) {
     const at: WeekRow = by.get(e.client) ?? { name: e.client, hours: 0, earningsUsd: 0, feeUsd: 0 };
-    at.hours += e.hours;
+    // Upwork states hours to two decimals — 36.83 for 36 hours 50 minutes. Each
+    // week is taken to the minute it stands for before weeks are added, so four
+    // weeks never drift off the minute.
+    at.hours += Math.round(e.hours * 60) / 60;
     at.earningsUsd += e.earningsUsd;
     at.feeUsd += e.feeUsd;
     // The weeks chosen for a client, first day to last.
@@ -296,11 +299,10 @@ export function totalsByClient(entries: UpworkEntry[]): WeekRow[] {
     if (range) at.cycle = at.cycle ? widen(at.cycle.start, at.cycle.end, range) : range;
     by.set(e.client, at);
   }
-  // Rounded once, at the end: a week of 30.67 hours is Upwork's own rounding,
-  // and three of them should not drift.
+  // Rounded once, at the end: hours to the minute, money to the cent.
   return [...by.values()].map((r) => ({
     ...r,
-    hours: Math.round(r.hours * 100) / 100,
+    hours: Math.round(r.hours * 60) / 60,
     earningsUsd: Math.round(r.earningsUsd * 100) / 100,
     feeUsd: Math.round(r.feeUsd * 100) / 100,
   }));

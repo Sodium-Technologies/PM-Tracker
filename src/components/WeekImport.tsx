@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Account, Period } from '../lib/types';
 import { fmtUsd, round2, type PeriodResult } from '../lib/calc';
-import { hoursAsText } from '../lib/time';
+import { hoursAsText, hoursToEntry } from '../lib/time';
 import {
   derive, findAccount, knownAliases, knownIgnored, normalizeName,
   parseUpworkCsv, parseWeek, totalsByClient,
@@ -123,7 +123,7 @@ export default function WeekImport({ period, periods, result, update, onClose }:
             currency: 'USD',
             rate: rateFromMoney !== null ? round2(rateFromMoney) : 0,
             feePct: feeFromMoney !== null ? round2(feeFromMoney) : 0,
-            entries: [row.hours],
+            entries: [hoursToEntry(row.hours, d.timeFormat)],
             cycleStart: row.cycle?.start ?? '',
             cycleEnd: row.cycle?.end ?? '',
           }));
@@ -138,14 +138,14 @@ export default function WeekImport({ period, periods, result, update, onClose }:
         if (rateFromMoney !== null) existing.rate = round2(rateFromMoney);
         if (feeFromMoney !== null) existing.feePct = round2(feeFromMoney);
         if (line.action === 'replace') {
-          existing.entries = [row.hours];
+          existing.entries = [hoursToEntry(row.hours, d.timeFormat)];
           // The weeks replace what was there, so they are the whole cycle now.
           if (row.cycle) { existing.cycleStart = row.cycle.start; existing.cycleEnd = row.cycle.end; }
         } else {
           // An untouched client carries a single zero as scaffolding, not as a
           // week that was worked; the first real week takes its place.
           const kept = existing.entries.filter((e) => Number(e) !== 0);
-          existing.entries = [...kept, row.hours];
+          existing.entries = [...kept, hoursToEntry(row.hours, d.timeFormat)];
           // Added weeks stretch the cycle to cover them, never shrink it.
           if (row.cycle) {
             const c = widen(existing.cycleStart ?? '', existing.cycleEnd ?? '', row.cycle);

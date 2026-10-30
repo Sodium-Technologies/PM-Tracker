@@ -110,7 +110,7 @@ export default function AccountsTable({ period, periods, result, update, timeFor
                       >{a.currency === 'PKR' ? 'PKR' : 'USD'}</button>
                     </span>
                   </td>
-                  <td><EntriesInput entries={a.entries} onChange={(v) => patch(a.id, { entries: v })} /></td>
+                  <td><EntriesInput entries={a.entries} format={timeFormat} onChange={(v) => patch(a.id, { entries: v })} /></td>
                   <td className="fig mono">{hoursAsText(r.units)}</td>
                   <td className="fig mono">{fmtUsd(r.grossUsd)}</td>
                   <td className="fig">

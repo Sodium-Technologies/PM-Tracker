@@ -1,5 +1,6 @@
 import React from 'react';
 import { useCanEdit } from '../lib/access';
+import { entryAsTyped, type TimeFormat } from '../lib/time';
 
 export function TextInput({ id, value, onChange, placeholder, className = '' }: {
   id?: string; value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
@@ -86,12 +87,13 @@ export function NumberInput({ id, value, onChange, unit, width = 72, step = 'any
 
 /** The individual time entries, written the way the sheet writes them:
  *  `20 + 20 + 20 + 20`. */
-export function EntriesInput({ id, entries, onChange }: {
-  id?: string; entries: number[]; onChange: (v: number[]) => void;
+export function EntriesInput({ id, entries, onChange, format = 'decimal' }: {
+  id?: string; entries: number[]; onChange: (v: number[]) => void; format?: TimeFormat;
 }) {
   const canEdit = useCanEdit();
   const [draft, setDraft] = React.useState<string | null>(null);
-  const shown = draft ?? entries.filter((e) => e !== 0 || entries.length === 1).join(' + ');
+  const shown = draft ?? entries.filter((e) => e !== 0 || entries.length === 1)
+    .map((e) => entryAsTyped(e, format)).join(' + ');
   return (
     <input
       id={id}

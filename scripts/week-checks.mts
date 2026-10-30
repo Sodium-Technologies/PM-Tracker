@@ -133,5 +133,43 @@ is('dismissals gather from every month, without repeating', dismissed.size, 2);
 is('and match however the name is written', dismissed.has('some other client'), true);
 is('a project nobody dismissed is not dismissed', dismissed.has('post road management llc'), false);
 
+/* ---------------------------------------------------------------- Upwork's decimal hours */
+// Upwork writes 36 hours 50 minutes as 36.83. A month that reads time as hours
+// and minutes must be handed 36.50, or it reads 36 hours 83 minutes.
+import { hoursToEntry, entryAsTyped, entriesToHours, entryProblems, hoursAsText } from '/home/user/PM-Tracker/src/lib/time';
+import { parseUpworkCsv as readReport, totalsByClient as byClient } from '/home/user/PM-Tracker/src/lib/week';
+
+is('36.83 decimal hours is 36.50 in hours and minutes', hoursToEntry(36.83, 'hm'), 36.5);
+is('and shows with two-digit minutes', entryAsTyped(hoursToEntry(36.83, 'hm'), 'hm'), '36.50');
+is('a few minutes keep their leading zero', entryAsTyped(hoursToEntry(12 + 5 / 60, 'hm'), 'hm'), '12.05');
+is('a whole number of hours is left alone', hoursToEntry(40, 'hm'), 40);
+is('minutes that round up to an hour carry over', hoursToEntry(9.999, 'hm'), 10);
+is('a decimal month keeps decimal hours', hoursToEntry(36.83, 'decimal'), 36.83);
+is('a typed entry in a decimal month is shown as typed', entryAsTyped(36.5, 'decimal'), '36.5');
+is('20 minutes and 30 seconds keep both pairs', entryAsTyped(12.203, 'hm'), '12.2030');
+
+const head = 'Date,Transaction ID,Transaction type,Transaction summary,Transaction summary details,Description 1,Description 2,Client team,Amount $';
+const week = (id: number, paid: string, span: string, hours: string, rate: number, amount: number) => [
+  `"${paid}",${id},Service Fee,Outreach,"Earnings for ${span}",Service fee,$${amount.toFixed(2)} x 10.0% = $${(amount / 10).toFixed(2)},Some Client LLC,-${(amount / 10).toFixed(2)}`,
+  `"${paid}",${id},Hourly,Outreach,"Earnings for ${span}","Earnings for ${span}",${hours} hours x $${rate.toFixed(2)} = $${amount.toFixed(2)},Some Client LLC,${amount.toFixed(2)}`,
+];
+const report = readReport([head,
+  ...week(1, 'Oct 9, 2026', 'Sep 28-Oct 4, 2026', '40.00', 9, 360),
+  ...week(2, 'Oct 16, 2026', 'Oct 5-Oct 11, 2026', '40.00', 9, 360),
+  ...week(3, 'Oct 23, 2026', 'Oct 12-Oct 18, 2026', '36.83', 9, 331.5),
+  ...week(4, 'Oct 30, 2026', 'Oct 19-Oct 25, 2026', '40.00', 9, 360),
+].join('\n'));
+const [client] = byClient(report.entries);
+is('four weeks with a 36.83 add up to 156 hours 50 minutes', hoursAsText(client.hours), '156h 50m');
+const stored = [hoursToEntry(client.hours, 'hm')];
+is('which an hours-and-minutes month is given as 156.50', entryAsTyped(stored[0], 'hm'), '156.50');
+is('and reads back as 156 hours 50 minutes', hoursAsText(entriesToHours(stored, 'hm')), '156h 50m');
+is('with nothing flagged as impossible minutes', entryProblems(stored, 'hm'), []);
+is('so the rate times the time is exactly what Upwork paid',
+   Math.round(entriesToHours(stored, 'hm') * 9 * 100) / 100, 1411.5);
+const weekly = report.entries.map((e) => hoursToEntry(byClient([e])[0].hours, 'hm'));
+is('added a week at a time, the weeks still come to 156 hours 50 minutes',
+   hoursAsText(entriesToHours(weekly, 'hm')), '156h 50m');
+
 console.log(bad ? `\n${bad} failed overall` : '\nAll week-reading checks passed');
 process.exit(bad ? 1 : 0);

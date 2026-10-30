@@ -60,6 +60,31 @@ export function entryProblems(entries: number[], format: TimeFormat): string[] {
   return entries.map((e) => parseEntry(e, format).problem).filter((p): p is string => !!p);
 }
 
+/** Hours worked out elsewhere — Upwork's 36.83, which is 36 hours 50 minutes —
+ *  written the way this month writes time, so the month reads back exactly the
+ *  hours it was given.
+ *
+ *  In an `hm` month that is hours and minutes: 36.83 becomes 36.50. Writing
+ *  36.83 there instead would be read as 36 hours 83 minutes. To the nearest
+ *  minute, which is as fine as a timesheet goes. */
+export function hoursToEntry(hours: number, format: TimeFormat): number {
+  const n = Number(hours) || 0;
+  if (format === 'decimal') return Math.round(n * 100) / 100;
+  const sign = n < 0 ? -1 : 1;
+  const minutes = Math.round(Math.abs(n) * 60);
+  return sign * (Math.floor(minutes / 60) + (minutes % 60) / 100);
+}
+
+/** An entry as it should be shown in the box. In an `hm` month the minutes are
+ *  always two digits — 36.50, not 36.5, which reads as half an hour. */
+export function entryAsTyped(value: number, format: TimeFormat): string {
+  const text = trim(Number(value) || 0);
+  if (format !== 'hm') return text;
+  const [whole, decimals] = text.split('.');
+  if (!decimals || decimals.length % 2 === 0) return text;
+  return `${whole}.${decimals}0`;
+}
+
 /** Hours as h/m, for showing a total that came out of the arithmetic. */
 export function hoursAsText(hours: number): string {
   const sign = hours < 0 ? '−' : '';
