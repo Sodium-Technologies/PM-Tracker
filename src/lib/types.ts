@@ -49,6 +49,9 @@ export interface Account {
    *  not say which days of work a figure is for. */
   cycleStart: string;
   cycleEnd: string;
+  /** Upwork bonuses already added to this month's adjustment, by transaction
+   *  id — so importing the same report again never counts a bonus twice. */
+  bonusIds: string[];
   notes: string;
 }
 

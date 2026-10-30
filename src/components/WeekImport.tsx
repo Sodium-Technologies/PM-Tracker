@@ -5,7 +5,7 @@ import { hoursAsText, hoursToEntry } from '../lib/time';
 import {
   derive, findAccount, knownAliases, knownIgnored, normalizeName,
   parseUpworkCsv, parseWeek, totalsByClient,
-  type UpworkEntry, type WeekRow,
+  type UpworkBonus, type UpworkEntry, type WeekRow,
 } from '../lib/week';
 import { newAccount } from '../lib/state';
 import { fmtCycle, widen } from '../lib/cycle';
@@ -52,7 +52,7 @@ export default function WeekImport({ period, periods, result, update, onClose }:
     const seen = new Map<string, { week: string; paid: string; hours: number; earned: number; fee: number }>();
     for (const e of (entries ?? []).filter((x) => !ignored.has(normalizeName(x.client)))) {
       const at = seen.get(e.week) ?? { week: e.week, paid: e.paid, hours: 0, earned: 0, fee: 0 };
-      at.hours += e.hours; at.earned += e.earningsUsd; at.fee += e.feeUsd;
+      at.hours += e.hours; at.earned += e.earningsUsd + e.bonusUsd; at.fee += e.feeUsd;
       seen.set(e.week, at);
     }
     return [...seen.values()];
@@ -118,7 +118,7 @@ export default function WeekImport({ period, periods, result, update, onClose }:
           .filter((x) => normalizeName(x) !== normalizeName(row.name));
 
         if (line.action === 'new' || !existing) {
-          d.accounts.push(newAccount({
+          const added = newAccount({
             name: row.name,
             currency: 'USD',
             rate: rateFromMoney !== null ? round2(rateFromMoney) : 0,
@@ -126,7 +126,9 @@ export default function WeekImport({ period, periods, result, update, onClose }:
             entries: [hoursToEntry(row.hours, d.timeFormat)],
             cycleStart: row.cycle?.start ?? '',
             cycleEnd: row.cycle?.end ?? '',
-          }));
+          });
+          addBonuses(added, row.bonuses ?? [], d.usdToPkr);
+          d.accounts.push(added);
           continue;
         }
         // Remember what this client is called on the other side, so the same
@@ -137,6 +139,10 @@ export default function WeekImport({ period, periods, result, update, onClose }:
         }
         if (rateFromMoney !== null) existing.rate = round2(rateFromMoney);
         if (feeFromMoney !== null) existing.feePct = round2(feeFromMoney);
+        addBonuses(existing, row.bonuses ?? [], d.usdToPkr);
+        // A line that is only a bonus brings no hours: the hours, and the cycle
+        // they cover, stay as they are.
+        if (!(row.hours > 0)) continue;
         if (line.action === 'replace') {
           existing.entries = [hoursToEntry(row.hours, d.timeFormat)];
           // The weeks replace what was there, so they are the whole cycle now.
@@ -251,7 +257,7 @@ export default function WeekImport({ period, periods, result, update, onClose }:
           </table>
           <div className="week-actions">
             <p className="settings-note">
-              {other.count > 0 && `${other.count} withdrawal line${other.count === 1 ? '' : 's'} totalling ${fmtUsd(other.usd)} — money moved, not earned, so not counted here.`}
+              {other.count > 0 && `${other.count} line${other.count === 1 ? '' : 's'} that ${other.count === 1 ? 'is' : 'are'} not earnings — withdrawals, their fees, Connects — totalling ${fmtUsd(other.usd)}, so not counted here.`}
             </p>
             <button className="btn" onClick={() => { setEntries(null); setProblems([]); }}>Back</button>
             <button className="btn primary" onClick={fromReport} disabled={!picked.length}>
@@ -289,9 +295,12 @@ export default function WeekImport({ period, periods, result, update, onClose }:
                   const now = account?.units ?? 0;
                   // A line that is not being applied leaves the client where it
                   // is — including a dismissed one, which has no client at all.
+                  // So does a line that is only a bonus: it brings money, not hours.
                   const after = line.action === 'skip' || line.action === 'ignore' ? now
-                    : line.action === 'replace' || line.action === 'new' ? line.row.hours
-                      : now + line.row.hours;
+                    : line.action === 'new' ? line.row.hours
+                      : !(line.row.hours > 0) ? now
+                        : line.action === 'replace' ? line.row.hours
+                          : now + line.row.hours;
                   return (
                     <tr key={i} className={line.action === 'skip' || line.action === 'ignore' ? 'week-skip' : undefined}>
                       <td>
@@ -302,6 +311,16 @@ export default function WeekImport({ period, periods, result, update, onClose }:
                         {line.row.cycle && (
                           <span className="sub">work from {fmtCycle(line.row.cycle.start, line.row.cycle.end)}</span>
                         )}
+                        {(line.row.bonuses ?? []).map((b) => {
+                          const counted = (account?.account.bonusIds ?? []).includes(b.id);
+                          return (
+                            <span key={b.id} className="sub">
+                              + bonus {fmtUsd(b.amountUsd)} less {fmtUsd(b.feeUsd)} fee, paid {b.paid}
+                              {b.note ? ` — ${b.note}` : ''}
+                              {counted ? ' · already in the adjustment' : ` · adds ${fmtUsd(b.amountUsd - b.feeUsd)} to the adjustment`}
+                            </span>
+                          );
+                        })}
                         {d.disagrees && (
                           <span className="sub warn-text">
                             the money says {hoursAsText(d.hoursFromMoney ?? 0)}, the timesheet says {hoursAsText(line.row.hours)}
@@ -382,4 +401,23 @@ export default function WeekImport({ period, periods, result, update, onClose }:
       )}
     </section>
   );
+}
+
+/** Add a client's Upwork bonuses to its adjustment, each one once.
+ *
+ *  A bonus is income like the hours, but it is not hours: it goes in after the
+ *  fee, as the adjustment, at what actually arrived — the bonus less the fee
+ *  Upwork took from it. Each is recorded by its transaction id, so applying the
+ *  same report again, to add or to replace, never counts one twice. */
+function addBonuses(account: Account, bonuses: UpworkBonus[], usdToPkr: number) {
+  for (const b of bonuses) {
+    if ((account.bonusIds ?? []).includes(b.id)) continue;
+    const net = b.amountUsd - b.feeUsd;
+    // The adjustment is in the client's own currency.
+    account.adjustmentUsd = round2((Number(account.adjustmentUsd) || 0)
+      + (account.currency === 'PKR' ? net * usdToPkr : net));
+    account.bonusIds = [...(account.bonusIds ?? []), b.id];
+    const said = `Upwork bonus ${fmtUsd(b.amountUsd)} less ${fmtUsd(b.feeUsd)} fee, paid ${b.paid}${b.note ? ` (${b.note})` : ''}`;
+    account.notes = account.notes ? `${account.notes} · ${said}` : said;
+  }
 }

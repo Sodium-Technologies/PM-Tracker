@@ -171,5 +171,33 @@ const weekly = report.entries.map((e) => hoursToEntry(byClient([e])[0].hours, 'h
 is('added a week at a time, the weeks still come to 156 hours 50 minutes',
    hoursAsText(entriesToHours(weekly, 'hm')), '156h 50m');
 
+/* ---------------------------------------------------------------- bonuses */
+// A bonus is income, paid with its own fee line under the same transaction id
+// — and in Upwork's report the fee line comes first.
+const bonusHead = 'Date,Transaction ID,Transaction type,Transaction summary,Transaction summary details,Description 1,Description 2,Entered description,Client team,Amount $';
+const bonusReport = readReport([bonusHead,
+  `"Oct 23, 2026",11,Service Fee,PM,"Earnings for Oct 12-Oct 18, 2026",Service fee,$100.00 x 15.0% = $15.00,,Some Client,-15.00`,
+  `"Oct 23, 2026",11,Hourly,PM,"Earnings for Oct 12-Oct 18, 2026","Earnings for Oct 12-Oct 18, 2026",10.00 hours x $10.00 = $100.00,,Some Client,100.00`,
+  `"Oct 20, 2026",12,Withdrawal Fee,Payoneer,,Withdrawal fee,$2.00,,,-2.00`,
+  `"Oct 20, 2026",12,Withdrawal,Payoneer,,Payoneer,,,,-449.00`,
+  `"Oct 17, 2026",13,Service Fee,PM,,Service fee,$100.00 x 15.0% = $15.00,,Some Client,-15.00`,
+  `"Oct 17, 2026",13,Bonus,PM,,Bonus received,,Missing payment ,Some Client,100.00`,
+  `"Oct 15, 2026",14,Connects,100 Connects,,100 Connects fee,100 Connects x $0.15 = $15.00,,,-15.00`,
+].join('\n'));
+const bonusEntry = bonusReport.entries.find((e) => e.kind === 'bonus');
+is('a bonus is read as income', bonusEntry?.bonusUsd, 100);
+is('with the fee from its own line', bonusEntry?.feeUsd, 15);
+is('and what the client wrote', bonusEntry?.note, 'Missing payment');
+is('offered by the day it was paid', bonusEntry?.week, 'Bonus paid Oct 17, 2026');
+is('a bonus is not counted with the withdrawals', [bonusReport.otherCount, bonusReport.otherUsd], [3, -466]);
+const [withBonus] = byClient(bonusReport.entries);
+is('the client carries the bonus', withBonus.bonuses, [{ id: '13', amountUsd: 100, feeUsd: 15, paid: 'Oct 17, 2026', note: 'Missing payment' }]);
+is('the bonus adds no hours', withBonus.hours, 10);
+is('and leaves the rate alone', derive(withBonus, 0).rate, 10);
+is('and the fee percentage too', derive(withBonus, 0).feePct, 15);
+is('it has no work week of its own', withBonus.cycle, { start: '2026-10-12', end: '2026-10-18' });
+const [onlyBonus] = byClient(bonusReport.entries.filter((e) => e.kind === 'bonus'));
+is('a bonus on its own is still a line', [onlyBonus.hours, onlyBonus.bonuses?.length], [0, 1]);
+
 console.log(bad ? `\n${bad} failed overall` : '\nAll week-reading checks passed');
 process.exit(bad ? 1 : 0);

@@ -22,6 +22,7 @@ export function newAccount(partial: Partial<Account> = {}): Account {
     aliases: [],
     cycleStart: '',
     cycleEnd: '',
+    bonusIds: [],
     notes: '',
     ...partial,
   };
@@ -65,6 +66,8 @@ export function rollForward(period: Period, label?: string): Period {
     return {
       ...a, id, entries: [0], adjustmentUsd: 0, status: 'Pending', receivedAmount: null, notes: '',
       cycleStart: cycle.start, cycleEnd: cycle.end,
+      // The adjustment starts again at nothing, and so do the bonuses in it.
+      bonusIds: [],
     };
   });
   const staff = period.staff.map((s) => {
@@ -131,6 +134,7 @@ export function normalize(state: AppState): AppState {
       a.freelancerPct ??= 70;
       a.cycleStart ??= '';
       a.cycleEnd ??= '';
+      a.bonusIds ??= [];
     }
     for (const m of p.staff) {
       m.shares ??= {};

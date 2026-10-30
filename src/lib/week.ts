@@ -11,6 +11,21 @@ export interface WeekRow {
   /** the days the work covers, when the report says — first day to last, as
    *  `YYYY-MM-DD`. A week typed in by hand carries none. */
   cycle?: { start: string; end: string };
+  /** Bonuses the client paid on top of the hours. They are income like any
+   *  other, but they are not hours, so they are kept out of `hours`,
+   *  `earningsUsd` and `feeUsd` — which is what the rate and fee are read from. */
+  bonuses?: UpworkBonus[];
+}
+
+/** A bonus off an Upwork report, with the fee Upwork took from it. */
+export interface UpworkBonus {
+  /** Upwork's transaction id: what stops one bonus being counted twice */
+  id: string;
+  amountUsd: number;
+  feeUsd: number;
+  paid: string;
+  /** what the client wrote when paying it, e.g. "Missing payment" */
+  note: string;
 }
 
 const NUM = /-?[\d,]*\.?\d+/;
@@ -151,7 +166,7 @@ export function derive(row: WeekRow, existingRate: number): Derived {
 /* ---------------------------------------------------------------- Upwork's own report */
 
 /** One paid line off an Upwork transaction report: a week's work on one
- *  contract, with the fee that was charged for it. */
+ *  contract, or a bonus, with the fee that was charged for it. */
 export interface UpworkEntry {
   /** the transaction id that ties the earning to its fee */
   id: string;
@@ -169,11 +184,16 @@ export interface UpworkEntry {
   feeUsd: number;
   rate: number;
   feePct: number;
+  /** a bonus: money paid on top of the hours, with none of its own */
+  kind: 'hourly' | 'bonus';
+  bonusUsd: number;
+  /** what the client wrote, for a bonus */
+  note: string;
 }
 
 export interface UpworkReport {
   entries: UpworkEntry[];
-  /** lines that are money moving, not money earned — withdrawals and their fees */
+  /** lines that are not earnings — withdrawals and their fees, Connects */
   otherUsd: number;
   otherCount: number;
   problems: string[];
@@ -236,6 +256,7 @@ export function parseUpworkCsv(text: string): UpworkReport {
   const cClient = col('Client team');
   const cAmount = col('Amount $');
   const cDesc = col('Description 2');
+  const cNote = col('Entered description');
 
   const byId = new Map<string, UpworkEntry>();
   let otherUsd = 0;
@@ -247,7 +268,9 @@ export function parseUpworkCsv(text: string): UpworkReport {
     const amount = Number(c[cAmount] ?? '');
     const desc = c[cDesc] ?? '';
 
-    if (type !== 'Hourly' && type !== 'Service Fee') {
+    // A bonus is income, paid with a fee of its own under the same transaction
+    // id. Withdrawals, their fees and Connects are money moving, not earned.
+    if (type !== 'Hourly' && type !== 'Service Fee' && type !== 'Bonus') {
       if (Number.isFinite(amount) && amount !== 0) { otherUsd += amount; otherCount++; }
       continue;
     }
@@ -261,6 +284,7 @@ export function parseUpworkCsv(text: string): UpworkReport {
       client: c[cClient] ?? '',
       role: c[cRole] ?? '',
       hours: 0, earningsUsd: 0, feeUsd: 0, rate: 0, feePct: 0,
+      kind: 'hourly', bonusUsd: 0, note: '',
     };
 
     if (type === 'Hourly') {
@@ -269,6 +293,12 @@ export function parseUpworkCsv(text: string): UpworkReport {
       at.hours = m ? Number(m[1].replace(/,/g, '')) : 0;
       at.rate = m ? Number(m[2].replace(/,/g, '')) : 0;
       at.earningsUsd = Number.isFinite(amount) ? Math.abs(amount) : 0;
+    } else if (type === 'Bonus') {
+      at.kind = 'bonus';
+      at.bonusUsd = Number.isFinite(amount) ? Math.abs(amount) : 0;
+      at.note = (c[cNote] ?? '').trim();
+      // A bonus covers no work week, so it is offered by the day it was paid.
+      if (!at.week) at.week = `Bonus paid ${at.paid}`;
     } else {
       const m = desc.match(/x\s*([\d.]+)\s*%/);
       at.feePct = m ? Number(m[1]) : 0;
@@ -278,7 +308,7 @@ export function parseUpworkCsv(text: string): UpworkReport {
   }
 
   const entries = [...byId.values()]
-    .filter((e) => e.client && e.hours > 0)
+    .filter((e) => e.client && (e.hours > 0 || e.bonusUsd > 0))
     .sort((a, b) => a.paidOn - b.paidOn || a.client.localeCompare(b.client));
   return { entries, otherUsd, otherCount, problems };
 }
@@ -288,6 +318,13 @@ export function totalsByClient(entries: UpworkEntry[]): WeekRow[] {
   const by = new Map<string, WeekRow>();
   for (const e of entries) {
     const at: WeekRow = by.get(e.client) ?? { name: e.client, hours: 0, earningsUsd: 0, feeUsd: 0 };
+    if (e.kind === 'bonus') {
+      at.bonuses = [...(at.bonuses ?? []), {
+        id: e.id, amountUsd: e.bonusUsd, feeUsd: e.feeUsd, paid: e.paid, note: e.note,
+      }];
+      by.set(e.client, at);
+      continue;
+    }
     // Upwork states hours to two decimals — 36.83 for 36 hours 50 minutes. Each
     // week is taken to the minute it stands for before weeks are added, so four
     // weeks never drift off the minute.
