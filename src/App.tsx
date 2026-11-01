@@ -17,6 +17,7 @@ import Mark from './components/Mark';
 import { useNewerVersion } from './lib/freshness';
 import Overview from './components/Overview';
 import People, { roleName } from './components/People';
+import Loans from './components/Loans';
 import TeamView from './components/TeamView';
 import SignIn from './components/SignIn';
 import { NumberInput } from './components/Fields';
@@ -25,7 +26,7 @@ const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 /** The app has three places to stand: the whole business (Dashboard), one month,
  *  or the settings that belong to neither. Tabs belong to a month and never
  *  leave it. */
-type View = 'dashboard' | 'month' | 'settings';
+type View = 'dashboard' | 'loans' | 'month' | 'settings';
 type Tab = 'overview' | 'revenue' | 'division' | 'payouts';
 
 export default function App() {
@@ -48,6 +49,9 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
   // Without Supabase configured the app is a local tool, and whoever opens it
   // owns their own copy — so everything is editable.
   const canEdit = cloudEnabled ? auth.canEdit : true;
+  // Loans are the super admin's own ledger. The database shows each loan only
+  // to the address that recorded it; the tab is not offered to anyone else.
+  const canSeeLoans = cloudEnabled ? auth.isSuperAdmin : true;
   const [state, setState] = React.useState<AppState>(() => (cloudEnabled ? emptyState() : loadState() ?? emptyState()));
   // A saved state with nothing in it is not data — someone who opened the page
   // once before should still get the seed.
@@ -169,6 +173,11 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
   }, [reload]);
 
   const period = state.periods.find((p) => p.id === state.activePeriodId) ?? state.periods[0];
+  /** Everybody on the payroll in any month, once each, by name. */
+  const payrollPeople = React.useMemo(() => [...new Map(state.periods.flatMap((p) => p.staff)
+    .filter((m) => m.name.trim())
+    .map((m) => [m.name.trim().toLowerCase(), m.name.trim()])).values()]
+    .sort((a, b) => a.localeCompare(b)), [state.periods]);
   const result = React.useMemo(() => computePeriod(period), [period]);
 
   /** Edit the active period through a draft copy, keeping state immutable.
@@ -334,6 +343,10 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
         <nav className="rail-nav">
           <button className={`rail-link${view === 'dashboard' ? ' active' : ''}`}
             onClick={() => setView('dashboard')}>Dashboard</button>
+          {canSeeLoans && (
+            <button className={`rail-link sub${view === 'loans' ? ' active' : ''}`}
+              onClick={() => setView('loans')}>Loans</button>
+          )}
           <button className={`rail-link${view === 'settings' ? ' active' : ''}`}
             onClick={() => setView('settings')}>Settings</button>
         </nav>
@@ -418,6 +431,20 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
           </>
         )}
 
+        {view === 'loans' && canSeeLoans && (
+          <>
+            <header className="head">
+              <h1 className="view-name">Loans</h1>
+              <span className="hint">only you can see these — they belong to no month and change no month's figures</span>
+              <div className="spacer" />
+              <button className="btn" onClick={() => setView('month')}>Back to {period.label}</button>
+            </header>
+            <div className="sheet">
+              <Loans people={payrollPeople} />
+            </div>
+          </>
+        )}
+
         {view === 'settings' && (
           <>
             <header className="head">
@@ -448,11 +475,7 @@ function Payroll({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
                 {auth.isSuperAdmin && (
                   <div className="span-2">
-                    <People me={auth.email} onChanged={auth.refreshRole}
-                      people={[...new Map(state.periods.flatMap((p) => p.staff)
-                        .filter((m) => m.name.trim())
-                        .map((m) => [m.name.trim().toLowerCase(), m.name.trim()])).values()]
-                        .sort((a, b) => a.localeCompare(b))} />
+                    <People me={auth.email} onChanged={auth.refreshRole} people={payrollPeople} />
                   </div>
                 )}
               </div>

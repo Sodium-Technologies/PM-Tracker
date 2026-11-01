@@ -198,4 +198,48 @@ if [ "$(truth "select count(*) from public.app_users where email = 'loose@exampl
 else echo "FAIL  a team member was added with no person"; fails=$((fails+1)); fi
 
 echo
+echo "— loans: only the address that recorded them —"
+# The SQL that adds loans to a running project must give the same result as
+# schema.sql, and survive being run twice.
+psql -h /tmp -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -f supabase/loans.sql >/dev/null
+psql -h /tmp -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -f supabase/loans.sql >/dev/null
+Q -c "delete from public.pm_loans;" >/dev/null
+# Saved the way the app saves: an upsert, with a forged owner thrown in.
+mutate owner@example.com "insert into public.pm_loans(id, data, owner_email) values ('l1', '{\"who\":\"Ali\"}', 'other.admin@example.com') on conflict (id) do update set data = excluded.data"
+if [ "$(truth "select coalesce(max(owner_email), '-') from public.pm_loans where id = 'l1';")" = "owner@example.com" ]; then
+  echo "PASS  a loan belongs to whoever recorded it, whatever the request says"
+else echo "FAIL  a loan was filed under [$(truth "select coalesce(max(owner_email), '-') from public.pm_loans where id = 'l1';")]"; fails=$((fails+1)); fi
+loans() { psql -h /tmp -p "$PORT" -U postgres -X -q -t -A -c "
+  begin; set local role authenticated;
+  set local request.jwt.claims = '{\"email\":\"$1\"}';
+  select count(*) from public.pm_loans; commit;" | grep -E '^[0-9]+$'; }
+for who in owner@example.com:1 other.admin@example.com:0 editor@example.com:0 viewer@example.com:0 nobody@example.com:0; do
+  email=${who%%:*}; want=${who##*:}; got=$(loans "$email")
+  if [ "$got" = "$want" ]; then echo "PASS  $email sees $got loan(s)"
+  else echo "FAIL  $email sees $got loan(s), expected $want"; fails=$((fails+1)); fi
+done
+mutate other.admin@example.com "update public.pm_loans set data = '{\"who\":\"stolen\"}' where id = 'l1'"
+mutate other.admin@example.com "delete from public.pm_loans where id = 'l1'"
+if [ "$(truth "select data->>'who' from public.pm_loans where id = 'l1';")" = "Ali" ]; then
+  echo "PASS  another super admin can neither change nor delete it"
+else echo "FAIL  another super admin changed or deleted a loan"; fails=$((fails+1)); fi
+mutate editor@example.com "insert into public.pm_loans(id, data) values ('l2', '{}')"
+mutate viewer@example.com "insert into public.pm_loans(id, data) values ('l3', '{}')"
+if [ "$(truth "select count(*) from public.pm_loans where id in ('l2','l3');")" = "0" ]; then
+  echo "PASS  an admin or a team member cannot record one"
+else echo "FAIL  someone other than a super admin recorded a loan"; fails=$((fails+1)); fi
+mutate owner@example.com "update public.pm_loans set owner_email = 'other.admin@example.com', data = '{\"who\":\"Ali\",\"amount\":5}' where id = 'l1'"
+if [ "$(truth "select owner_email || ' ' || (data->>'amount') from public.pm_loans where id = 'l1';")" = "owner@example.com 5" ]; then
+  echo "PASS  the owner can change a loan, but not hand it to someone else"
+else echo "FAIL  [$(truth "select owner_email || ' ' || coalesce(data->>'amount','-') from public.pm_loans where id = 'l1';")]"; fails=$((fails+1)); fi
+mutate owner@example.com "delete from public.pm_loans where id = 'l1'"
+if [ "$(truth "select count(*) from public.pm_loans where id = 'l1';")" = "0" ]; then
+  echo "PASS  and can delete it"
+else echo "FAIL  the owner could not delete their own loan"; fails=$((fails+1)); fi
+# What loans add must not disturb anything already there.
+if [ "$(truth "select count(*) from pg_policies where tablename <> 'pm_loans' and policyname like 'pm_loans%';")" = "0" ]; then
+  echo "PASS  loans add rules to their own table and no other"
+else echo "FAIL  loans added rules to another table"; fails=$((fails+1)); fi
+
+echo
 [ "$fails" = "0" ] && echo "A private month is private." || { echo "$fails check(s) failed"; exit 1; }

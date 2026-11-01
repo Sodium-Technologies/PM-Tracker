@@ -56,7 +56,7 @@ const session = (email) => ({
 /** Open the app with Supabase stubbed: `role` null means "not on the list".
  *  `down: true` makes every call to the project fail, as an unreachable or
  *  paused project does. */
-async function open({ email, role, staffName = null, periods = [], teamPay = [], teamWrites = [], periodReads = [], down = false, path = '', installed = false, oldSchema = false, writes = [], refuse = 0, tokens = [] }) {
+async function open({ email, role, staffName = null, periods = [], teamPay = [], teamWrites = [], periodReads = [], loanCalls = [], loansMissing = false, down = false, path = '', installed = false, oldSchema = false, writes = [], refuse = 0, tokens = [] }) {
   // `refuse`: how many writes the database turns down as a policy violation
   // before accepting one. `tokens` collects each refresh, so a test can see one
   // happened.
@@ -101,6 +101,17 @@ async function open({ email, role, staffName = null, periods = [], teamPay = [],
     if (url.includes('/rest/v1/app_users')) {
       if (route.request().method() !== 'GET') return json([]);
       return json(role ? [{ email, role, staff_name: staffName, created_at: '2026-01-01' }] : []);
+    }
+    if (url.includes('/rest/v1/pm_loans')) {
+      loanCalls.push({ method: route.request().method(), body: route.request().postData() ?? '' });
+      // A project that has not run supabase/loans.sql, as PostgREST reports it.
+      if (loansMissing) {
+        return route.fulfill({
+          status: 404, contentType: 'application/json',
+          body: JSON.stringify({ code: 'PGRST205', message: "Could not find the table 'public.pm_loans' in the schema cache" }),
+        });
+      }
+      return json([]);
     }
     if (url.includes('/rest/v1/team_pay')) {
       if (route.request().method() !== 'GET') {
@@ -343,8 +354,13 @@ const samplePeriod = {
 
 // 4. editor
 {
-  const { page, ctx } = await open({ email: 'editor@company.com', role: 'editor', periods: [samplePeriod] });
+  const loanCalls = [];
+  const { page, ctx } = await open({ email: 'editor@company.com', role: 'editor', periods: [samplePeriod], loanCalls });
   ok('editor is labelled can edit', (await page.locator('.role').innerText()).trim() === 'Admin');
+  ok('an admin is not offered loans',
+     (await page.locator('.rail-nav .rail-link').allInnerTexts()).join('|') === 'Dashboard|Settings',
+     (await page.locator('.rail-nav .rail-link').allInnerTexts()).join('|'));
+  ok('and the page never asks for them', loanCalls.length === 0);
   ok('editor gets New period', (await page.getByRole('button', { name: 'Start a new month' }).count()) === 1);
   ok('editor can set who sees a month', await page.locator('#visibility').isVisible());
   ok('a month defaults to the core team', (await page.locator('#visibility').inputValue()) === 'core');
@@ -417,6 +433,42 @@ const samplePeriod = {
   ok('administrator cannot change their own row',
     await page.locator('table tbody tr').first().locator('select').isDisabled());
   ok('no page errors for an administrator', errors.length === 0, errors.join('; '));
+  await ctx.close();
+}
+
+// 5b. loans — the super admin's own ledger
+{
+  const loanCalls = [];
+  const { page, ctx, errors } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod], loanCalls });
+  ok('a super admin has loans under the dashboard',
+     (await page.locator('.rail-nav .rail-link').allInnerTexts()).join('|') === 'Dashboard|Loans|Settings',
+     (await page.locator('.rail-nav .rail-link').allInnerTexts()).join('|'));
+  ok('loans are not read until they are opened', loanCalls.length === 0);
+  await page.getByRole('button', { name: 'Loans', exact: true }).click();
+  await page.waitForTimeout(400);
+  ok('opening them reads the loans table', loanCalls.some((c) => c.method === 'GET'));
+  await page.locator('#loan-who').fill('Naveed');
+  await page.locator('#loan-amount').fill('25000');
+  await page.getByRole('button', { name: 'Record loan' }).click();
+  await page.waitForTimeout(600);
+  const saved = loanCalls.find((c) => c.method === 'POST');
+  ok('recording a loan saves it to the loans table', !!saved && /"who":"Naveed"/.test(saved.body) && /"amount":25000/.test(saved.body),
+     saved?.body.slice(0, 160));
+  ok('without naming an owner — the database stamps that', !!saved && !/owner_email/.test(saved.body));
+  ok('no page errors on the loans page', errors.length === 0, errors.join('; '));
+  await ctx.close();
+}
+
+{
+  const { page, ctx } = await open({ email: 'nav8khan@gmail.com', role: 'super_admin', periods: [samplePeriod], loansMissing: true });
+  await page.getByRole('button', { name: 'Loans', exact: true }).click();
+  await page.waitForTimeout(400);
+  ok('a project without the loans table says what to run',
+     /run supabase\/loans\.sql/.test(await page.locator('.loans').innerText()), (await page.locator('.notices').allInnerTexts()).join(' '));
+  ok('and that it changes nothing else', /nothing else changes/.test(await page.locator('.loans').innerText()));
+  await page.getByRole('button', { name: /Back to/ }).click();
+  await page.waitForTimeout(300);
+  ok('the months still open without it', (await page.locator('.period-name').inputValue()) === 'September 2026');
   await ctx.close();
 }
 

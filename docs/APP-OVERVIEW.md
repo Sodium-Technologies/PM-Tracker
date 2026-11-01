@@ -49,6 +49,13 @@ All of this is enforced by Postgres row-level security, not by the page:
   must have a `staff_name` (check constraint).
 - `periods(id, label, data jsonb, visibility, owner_email, updated_at, updated_by)`:
   one row per month, with the whole month as JSON in `data`.
+- `pm_loans(id, data jsonb, owner_email, updated_at)`: the super admin's
+  private loans ledger, one row per loan with its repayments in `data`.
+  `owner_email` is stamped from the sign-in by the `pm_loans_stamp` trigger;
+  only that address, while a super admin, can read or change a loan. Added by
+  `supabase/loans.sql`, which only adds objects named `pm_loans…`. The same
+  Supabase project also holds Cloud Krown Operations' `cko_*` tables, which
+  pm-payroll never touches.
 - `team_pay(period_id, member, label, summary jsonb)`: one summary per person
   per month. The app rewrites it whenever an admin saves a month. A summary
   holds projects (name, hours, share %, earned PKR/USD), pay, amount taken
@@ -92,6 +99,11 @@ All of this is enforced by Postgres row-level security, not by the page:
   - Distributions (transfers and the left-to-send ledger)
 - **Month header**: the month's name, USD→PKR rate, time format, Seen by,
   Undo (also Ctrl/Cmd+Z, for the current session), Duplicate and Delete.
+- **Loans** (under Dashboard; super admin only): money lent and borrowed, in
+  PKR or USD, with dated repayments. Shows what is owed to you, what you owe,
+  what has been repaid and where each person stands, and downloads as its own
+  Excel file. Belongs to no month, changes no month's figures, and is not in
+  the backup or the books' Excel download.
 - **Settings**: Load a sheet, Save a backup, and Access (super admin only;
   picking Team requires choosing a person).
 - **Team view**: a team member's only screen. Total earned, still owed, pay
