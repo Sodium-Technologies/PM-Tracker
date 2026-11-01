@@ -53,7 +53,10 @@ All of this is enforced by Postgres row-level security, not by the page:
   private loans ledger, one row per loan with its repayments in `data`.
   `owner_email` is stamped from the sign-in by the `pm_loans_stamp` trigger;
   only that address, while a super admin, can read or change a loan. Added by
-  `supabase/loans.sql`, which only adds objects named `pm_loans…`. The same
+  `supabase/loans.sql`, which only adds objects named `pm_loans…` (no drop,
+  delete, update, insert or replace), and refuses to apply anything if a
+  fingerprint of the rest of the public schema, data included, would differ
+  afterwards. The same
   Supabase project also holds Cloud Krown Operations' `cko_*` tables, which
   pm-payroll never touches.
 - `team_pay(period_id, member, label, summary jsonb)`: one summary per person
@@ -100,7 +103,8 @@ All of this is enforced by Postgres row-level security, not by the page:
 - **Month header**: the month's name, USD→PKR rate, time format, Seen by,
   Undo (also Ctrl/Cmd+Z, for the current session), Duplicate and Delete.
 - **Loans** (under Dashboard; super admin only): money lent and borrowed, in
-  PKR or USD, with dated repayments. Shows what is owed to you, what you owe,
+  PKR or USD, with dated repayments (recorded from a form at the top or from
+  each loan, and listed together). Shows what is owed to you, what you owe,
   what has been repaid and where each person stands, and downloads as its own
   Excel file. Belongs to no month, changes no month's figures, and is not in
   the backup or the books' Excel download.

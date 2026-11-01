@@ -198,11 +198,56 @@ if [ "$(truth "select count(*) from public.app_users where email = 'loose@exampl
 else echo "FAIL  a team member was added with no person"; fails=$((fails+1)); fi
 
 echo
+echo "— adding loans changes nothing else —"
+# supabase/loans.sql is run on a project shared with another app. It must add
+# its own table and nothing more — and stop, changing nothing, if anything
+# outside that table would change. Each change below is slipped into a copy of
+# it; every one must be refused, and leave no loans table behind either.
+Q -c "drop table if exists public.pm_loans; drop function if exists public.pm_loans_stamp();
+      create table if not exists public.cko_probe (id int primary key, v int);
+      insert into public.cko_probe values (1, 1) on conflict (id) do update set v = 1;" >/dev/null
+probe() { # label, statement slipped in just before the check
+  local file; file=$(mktemp)
+  awk -v stmt="$2" '/-- 5. The check/ { print "  " stmt } { print }' supabase/loans.sql > "$file"
+  if psql -h /tmp -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -f "$file" >/dev/null 2>"$file.err"; then
+    echo "FAIL  $1 went through"; fails=$((fails+1))
+  elif ! grep -q 'Stopped, and nothing was applied' "$file.err"; then
+    echo "FAIL  $1 failed for another reason: $(grep ERROR "$file.err" | head -1)"; fails=$((fails+1))
+  elif [ "$(truth "select count(*) from pg_class where relname = 'pm_loans';")" != "0" ]; then
+    echo "FAIL  $1 was refused, but left the loans table behind"; fails=$((fails+1))
+  else echo "PASS  $1 is refused, and nothing is applied"; fi
+  rm -f "$file" "$file.err"
+}
+probe "a new column on the months"           "alter table public.periods add column zz_probe int;"
+probe "a row added to the access list"       "insert into public.app_users(email, role) values ('probe@example.com', 'editor');"
+probe "a changed row in another app's table" "update public.cko_probe set v = v + 1;"
+probe "a changed function"                   "alter function public.member_role() security invoker;"
+probe "a rule removed from the months"       "drop policy periods_delete on public.periods;"
+probe "a grant changed on another table"     "revoke select on public.team_pay from authenticated;"
+if [ "$(truth "select count(*) from information_schema.columns where table_name = 'periods' and column_name = 'zz_probe';")" = "0" ] \
+  && [ "$(truth "select count(*) from public.app_users where email = 'probe@example.com';")" = "0" ] \
+  && [ "$(truth "select v from public.cko_probe where id = 1;")" = "1" ] \
+  && [ "$(truth "select count(*) from pg_policies where policyname = 'periods_delete';")" = "1" ]; then
+  echo "PASS  and every one of those was undone"
+else echo "FAIL  a refused change was left behind"; fails=$((fails+1)); fi
+before=$(truth "select md5(string_agg(x, ',' order by x)) from (select concat_ws(':', tablename, policyname, qual, with_check) x from pg_policies where tablename <> 'pm_loans' union all select p.oid::regprocedure::text || md5(pg_get_functiondef(p.oid)) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname not like 'pm\_loans%' and p.prokind = 'f' union all select (select count(*) from public.periods)::text || (select count(*) from public.app_users)::text || (select count(*) from public.team_pay)::text) y;")
+psql -h /tmp -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -f supabase/loans.sql >/dev/null
+psql -h /tmp -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -f supabase/loans.sql >/dev/null
+after=$(truth "select md5(string_agg(x, ',' order by x)) from (select concat_ws(':', tablename, policyname, qual, with_check) x from pg_policies where tablename <> 'pm_loans' union all select p.oid::regprocedure::text || md5(pg_get_functiondef(p.oid)) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname not like 'pm\_loans%' and p.prokind = 'f' union all select (select count(*) from public.periods)::text || (select count(*) from public.app_users)::text || (select count(*) from public.team_pay)::text) y;")
+if [ "$before" = "$after" ] && [ "$(truth "select count(*) from pg_policies where tablename = 'pm_loans';")" = "4" ]; then
+  echo "PASS  the real thing adds the loans table, twice over, and leaves the rest as it was"
+else echo "FAIL  running supabase/loans.sql changed something else, or did not add loans"; fails=$((fails+1)); fi
+# Statements that remove or rewrite: none may start a line, and "or replace"
+# may only touch this session's scratch space (pg_temp).
+risky=$({ grep -inE '^\s*(drop|delete|update|insert|truncate|alter\s+(function|policy|schema)|comment)\b' supabase/loans.sql;
+          grep -in 'or replace' supabase/loans.sql | grep -vE '^[0-9]+:\s*--' | grep -v 'pg_temp\.'; } || true)
+if [ -z "$risky" ]; then
+  echo "PASS  the script has no drop, delete, update, insert, truncate or replace"
+else echo "FAIL  the script has: $(echo "$risky" | head -3)"; fails=$((fails+1)); fi
+Q -c "drop table if exists public.cko_probe;" >/dev/null
+
+echo
 echo "— loans: only the address that recorded them —"
-# The SQL that adds loans to a running project must give the same result as
-# schema.sql, and survive being run twice.
-psql -h /tmp -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -f supabase/loans.sql >/dev/null
-psql -h /tmp -p "$PORT" -U postgres -X -q -v ON_ERROR_STOP=1 -f supabase/loans.sql >/dev/null
 Q -c "delete from public.pm_loans;" >/dev/null
 # Saved the way the app saves: an upsert, with a forged owner thrown in.
 mutate owner@example.com "insert into public.pm_loans(id, data, owner_email) values ('l1', '{\"who\":\"Ali\"}', 'other.admin@example.com') on conflict (id) do update set data = excluded.data"

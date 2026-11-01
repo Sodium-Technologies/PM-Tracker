@@ -367,68 +367,9 @@ notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------- 2c. loans
 
--- A private ledger of loans and repayments, outside the months. Only the
--- address that recorded a loan sees it, and only while it is a super admin.
--- Also in supabase/loans.sql, for adding it to a project that already runs.
-create table if not exists public.pm_loans (
-  id          text primary key,
-  data        jsonb not null,          -- the loan and its repayments
-  owner_email text,                    -- stamped by the trigger, never sent
-  updated_at  timestamptz not null default now()
-);
-alter table public.pm_loans enable row level security;
-
--- The owner is the signed-in address that recorded the loan — taken from the
--- sign-in, never from the request, so nobody can file a loan under someone
--- else's name or move one to themselves. It never changes afterwards.
-create or replace function public.pm_loans_stamp()
-returns trigger
-language plpgsql
-as $fn_pm_loans$
-begin
-  new.updated_at := now();
-  if tg_op = 'INSERT' then
-    new.owner_email := lower(auth.jwt() ->> 'email');
-  else
-    new.owner_email := old.owner_email;
-  end if;
-  return new;
-end
-$fn_pm_loans$;
-
-drop trigger if exists pm_loans_stamp on public.pm_loans;
-create trigger pm_loans_stamp
-  before insert or update on public.pm_loans
-  for each row execute function public.pm_loans_stamp();
-
-drop policy if exists pm_loans_select on public.pm_loans;
-create policy pm_loans_select on public.pm_loans
-  for select to authenticated
-  using (public.member_role() = 'super_admin'
-         and lower(owner_email) = lower(auth.jwt() ->> 'email'));
-
-drop policy if exists pm_loans_insert on public.pm_loans;
-create policy pm_loans_insert on public.pm_loans
-  for insert to authenticated
-  with check (public.member_role() = 'super_admin'
-              and lower(owner_email) = lower(auth.jwt() ->> 'email'));
-
-drop policy if exists pm_loans_update on public.pm_loans;
-create policy pm_loans_update on public.pm_loans
-  for update to authenticated
-  using (public.member_role() = 'super_admin'
-         and lower(owner_email) = lower(auth.jwt() ->> 'email'))
-  with check (public.member_role() = 'super_admin'
-              and lower(owner_email) = lower(auth.jwt() ->> 'email'));
-
-drop policy if exists pm_loans_delete on public.pm_loans;
-create policy pm_loans_delete on public.pm_loans
-  for delete to authenticated
-  using (public.member_role() = 'super_admin'
-         and lower(owner_email) = lower(auth.jwt() ->> 'email'));
-
-revoke all on public.pm_loans from anon;
-grant select, insert, update, delete on public.pm_loans to authenticated;
+-- The private loans ledger lives in its own file: run supabase/loans.sql after
+-- this one. It only adds things named pm_loans…, and checks that nothing else
+-- in the project changed before it keeps anything.
 
 -- ---------------------------------------------------------------- 3. check it worked
 

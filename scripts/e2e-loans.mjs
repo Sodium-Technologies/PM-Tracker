@@ -83,22 +83,48 @@ await record('Ali', 50000, { note: 'house rent' });
 ok('a loan is recorded', (await page.locator('.loan-row').count()) === 1);
 ok('it is owed to you', /Owed to you PKR 50,000/i.test(await figures()), await figures());
 
-await rowOf('Ali').locator('.loan-toggle').click();
-await page.getByLabel('Repayment from Ali').fill('20000');
-await page.getByRole('button', { name: 'Record repayment' }).click();
+// Recording a repayment from the form at the top.
+const repayForm = page.locator('#record-repayment');
+ok('the repayment form waits for a loan to be chosen', await repayForm.getByRole('button', { name: 'Record repayment' }).isDisabled());
+ok('it offers the open loans', /Ali — PKR 50,000 left \(lent 5 Oct 2026\)/.test(await page.locator('#repay-loan').innerText()),
+   await page.locator('#repay-loan').innerText());
+await page.locator('#repay-loan').selectOption({ label: 'Ali — PKR 50,000 left (lent 5 Oct 2026)' });
+await page.getByLabel('Date of this repayment').fill('2026-10-20');
+await page.locator('#repay-amount').fill('60000');
+ok('paying back more than is owed is warned about', /more than the PKR 50,000 left/.test(await repayForm.innerText()));
+await page.locator('#repay-amount').fill('20000');
+await repayForm.getByRole('button', { name: 'Record repayment' }).click();
 await page.waitForTimeout(200);
+ok('it says what was recorded and what is left',
+   /Recorded PKR 20,000 from Ali\. PKR 30,000 is still owed to you\./.test(await repayForm.innerText()), await repayForm.innerText());
 ok('a repayment brings the balance down', /PKR 30,000/.test(await rowOf('Ali').innerText()), (await rowOf('Ali').innerText()).replace(/\s+/g, ' '));
 ok('and is counted as repaid', /Repaid so far PKR 20,000/i.test(await figures()), await figures());
 ok('the loan is still open', /Open/.test(await rowOf('Ali').locator('.loan-status').innerText()));
+ok('each loan shows how many repayments it has', /Repayments \(1\)/.test(await rowOf('Ali').innerText()));
+const history = page.locator('.repayment-table');
+ok('the repayment is listed with the others', /Ali\s+20 Oct 2026\s+Paid back to you\s+PKR 20,000/.test(await history.innerText()),
+   (await history.innerText()).replace(/\s+/g, ' '));
 
-await page.getByRole('button', { name: /Repaid in full/ }).click();
+// And from the loan itself.
+await rowOf('Ali').getByRole('button', { name: /^Repayments/ }).click();
+await page.waitForTimeout(200);
+ok('a loan opens to its own repayments', (await page.locator('.loan-detail').count()) === 1);
+await page.locator('.loan-detail').getByRole('button', { name: /Repaid in full/ }).click();
 await page.waitForTimeout(200);
 ok('repaying in full settles it', (await page.locator('.loan-row').count()) === 0
    && /Every loan is repaid/.test(await page.locator('.loan-table').innerText()));
 ok('nothing is owed to you any more', /Owed to you PKR 0 /i.test(await figures()), await figures());
+ok('a settled loan is no longer offered for repayment', !/Ali/.test(await page.locator('#repay-loan').innerText()));
+ok('both repayments are listed', (await history.locator('tbody tr').count()) === 2);
 await page.getByRole('button', { name: /^All \(/ }).click();
 await page.waitForTimeout(200);
 ok('a repaid loan is still there under All', /Repaid/.test(await rowOf('Ali').locator('.loan-status').innerText()));
+
+// A repayment deleted from the list reopens the loan.
+await history.getByRole('button', { name: /Delete the repayment of PKR 20,000 from Ali/ }).click();
+await page.waitForTimeout(200);
+ok('deleting a repayment puts the balance back', /PKR 20,000/.test(await rowOf('Ali').locator('td').nth(5).innerText())
+   && /Open/.test(await rowOf('Ali').locator('.loan-status').innerText()), (await rowOf('Ali').innerText()).replace(/\s+/g, ' '));
 
 await record('Bank', 100, { direction: 'borrowed', currency: 'USD' });
 ok('money borrowed is what you owe, in its own currency', /You owe \$100\.00/i.test(await figures()), await figures());
@@ -111,6 +137,7 @@ await page.getByRole('button', { name: 'Loans', exact: true }).click();
 await page.getByRole('button', { name: /^All \(/ }).click();
 await page.waitForTimeout(200);
 ok('loans are kept', (await page.locator('.loan-row').count()) === 2);
+ok('and so are their repayments', (await page.locator('.repayment-table tbody tr').count()) === 1);
 
 await rowOf('Bank').getByRole('button', { name: /Delete the loan/ }).click();
 await page.waitForTimeout(200);
